@@ -548,8 +548,11 @@ export default function OnboardingPage() {
             </div>
             <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
               <div
-                className="h-full rounded-full transition-all duration-500" style={{ background: "linear-gradient(90deg, hsl(43,85%,45%), hsl(43,90%,58%))" }}
-                style={{ width: `${progressPercent}%` }}
+                className="h-full rounded-full transition-all duration-500"
+                style={{
+                  background: "linear-gradient(90deg, hsl(43,85%,45%), hsl(43,90%,58%))",
+                  width: `${progressPercent}%`,
+                }}
               />
             </div>
           </div>
