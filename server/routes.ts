@@ -1,8 +1,8 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { requireSharedAdmin, requireSharedAuth } from "./auth.ts";
-import { storage } from "./storage.ts";
-import { insertAgentSchema, insertIcaSignatureSchema } from "../shared/schema.ts";
+import { requireSharedAdmin, requireSharedAuth } from "./auth";
+import { storage } from "./storage";
+import { insertAgentSchema, insertIcaSignatureSchema } from "../shared/schema";
 import { z } from "zod";
 
 const agentUpdateSchema = insertAgentSchema.partial();
