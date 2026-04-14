@@ -1,26 +1,17 @@
 {
   "version": 2,
+  "buildCommand": "npm run build",
   "installCommand": "npm install",
-  "builds": [
-    {
-      "src": "api/[...path].ts",
-      "use": "@vercel/node",
-      "config": {
-        "includeFiles": ["server/**", "shared/**"]
-      }
-    },
-    {
-      "src": "package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist/public"
-      }
+  "outputDirectory": "dist/public",
+  "functions": {
+    "dist/api/index.cjs": {
+      "runtime": "nodejs20.x"
     }
-  ],
+  },
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "api/[...path].ts"
+      "dest": "dist/api/index.cjs"
     },
     {
       "handle": "filesystem"
