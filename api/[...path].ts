@@ -11,6 +11,16 @@ async function getApp() {
 }
 
 export default async function handler(req: any, res: any) {
-  const app = await getApp();
-  return app(req, res);
+  try {
+    const app = await getApp();
+    return app(req, res);
+  } catch (error) {
+    console.error("Vercel function bootstrap failed:", error);
+
+    if (!res.headersSent) {
+      res.status(500).json({
+        message: error instanceof Error ? error.message : "Internal Server Error",
+      });
+    }
+  }
 }

@@ -1,7 +1,6 @@
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import { createServer } from "http";
 import { attachSharedAuthUser } from "./auth";
-import { ensureDatabase } from "./db";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 
@@ -63,7 +62,6 @@ export async function createApp() {
     next();
   });
 
-  await ensureDatabase();
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {

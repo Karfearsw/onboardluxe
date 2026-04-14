@@ -1,30 +1,57 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 
-const connectionString = process.env.DATABASE_URL;
-
-if (!connectionString) {
-  throw new Error("Missing DATABASE_URL. Set your Neon/Postgres connection string before starting the app.");
-}
+const connectionString = process.env.DATABASE_URL?.trim();
 
 const globalForDb = globalThis as typeof globalThis & {
   __oceanLuxePool?: Pool;
+  __oceanLuxeDb?: ReturnType<typeof drizzle>;
   __oceanLuxeDbInit?: Promise<void>;
 };
 
-export const pool =
-  globalForDb.__oceanLuxePool ??
-  new Pool({
-    connectionString,
-    ssl: { rejectUnauthorized: false },
-    max: process.env.VERCEL ? 5 : 10,
-  });
+function getConnectionString() {
+  if (!connectionString) {
+    throw new Error("Missing DATABASE_URL. Set your Neon/Postgres connection string in Vercel project environment variables.");
+  }
 
-if (!globalForDb.__oceanLuxePool) {
-  globalForDb.__oceanLuxePool = pool;
+  return connectionString;
 }
 
-export const db = drizzle(pool);
+function getPoolInstance() {
+  if (!globalForDb.__oceanLuxePool) {
+    globalForDb.__oceanLuxePool = new Pool({
+      connectionString: getConnectionString(),
+      ssl: { rejectUnauthorized: false },
+      max: process.env.VERCEL ? 5 : 10,
+    });
+  }
+
+  return globalForDb.__oceanLuxePool;
+}
+
+function getDbInstance() {
+  if (!globalForDb.__oceanLuxeDb) {
+    globalForDb.__oceanLuxeDb = drizzle(getPoolInstance());
+  }
+
+  return globalForDb.__oceanLuxeDb;
+}
+
+export const pool = new Proxy({} as Pool, {
+  get(_target, prop) {
+    const instance = getPoolInstance() as any;
+    const value = instance[prop];
+    return typeof value === "function" ? value.bind(instance) : value;
+  },
+}) as Pool;
+
+export const db = new Proxy({} as ReturnType<typeof drizzle>, {
+  get(_target, prop) {
+    const instance = getDbInstance() as any;
+    const value = instance[prop];
+    return typeof value === "function" ? value.bind(instance) : value;
+  },
+}) as ReturnType<typeof drizzle>;
 
 async function initializeDatabase() {
   await pool.query(`
