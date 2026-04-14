@@ -1,71 +1,6 @@
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import Database from "better-sqlite3";
+import { and, asc, eq } from "drizzle-orm";
+import { db, ensureDatabase } from "./db";
 import { agents, onboardingTasks, documents, icaSignatures, trainingProgress } from "../shared/schema";
-
-const dbPath = process.env.VERCEL ? "/tmp/data.db" : "data.db";
-const sqlite = new Database(dbPath);
-sqlite.pragma("journal_mode = WAL");
-sqlite.exec(`
-  CREATE TABLE IF NOT EXISTS agents (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    email TEXT NOT NULL UNIQUE,
-    phone TEXT NOT NULL,
-    start_date TEXT NOT NULL,
-    subscription_status TEXT NOT NULL DEFAULT 'Trial',
-    payout_method_type TEXT DEFAULT '',
-    payout_details TEXT DEFAULT '',
-    sofi_referral_status TEXT NOT NULL DEFAULT 'Not Invited',
-    sofi_referral_link TEXT DEFAULT '',
-    performance_notes TEXT DEFAULT '',
-    onboarding_step INTEGER NOT NULL DEFAULT 1,
-    onboarding_complete INTEGER NOT NULL DEFAULT 0
-  );
-
-  CREATE TABLE IF NOT EXISTS onboarding_tasks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    agent_id INTEGER NOT NULL,
-    step_number INTEGER NOT NULL,
-    task_key TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'pending',
-    completed_at TEXT DEFAULT '',
-    notes TEXT DEFAULT ''
-  );
-
-  CREATE TABLE IF NOT EXISTS documents (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    agent_id INTEGER NOT NULL,
-    doc_type TEXT NOT NULL,
-    file_name TEXT NOT NULL,
-    file_url TEXT NOT NULL,
-    uploaded_at TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'Pending Review'
-  );
-
-  CREATE TABLE IF NOT EXISTS ica_signatures (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    agent_id INTEGER NOT NULL UNIQUE,
-    legal_name TEXT NOT NULL,
-    address TEXT NOT NULL,
-    city TEXT NOT NULL,
-    state TEXT NOT NULL,
-    zip TEXT NOT NULL,
-    signature_data_url TEXT NOT NULL,
-    signed_at TEXT NOT NULL,
-    ip_address TEXT DEFAULT '',
-    agreed INTEGER NOT NULL DEFAULT 0
-  );
-
-  CREATE TABLE IF NOT EXISTS training_progress (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    agent_id INTEGER NOT NULL,
-    module_key TEXT NOT NULL,
-    module_name TEXT NOT NULL,
-    completed INTEGER NOT NULL DEFAULT 0,
-    completed_at TEXT DEFAULT ''
-  );
-`);
-export const db = drizzle(sqlite);
 import type {
   Agent, InsertAgent,
   OnboardingTask, InsertOnboardingTask,
@@ -73,106 +8,144 @@ import type {
   IcaSignature, InsertIcaSignature,
   TrainingProgress, InsertTrainingProgress,
 } from "../shared/schema";
-import { eq, and } from "drizzle-orm";
 
 export interface IStorage {
   // Agents
-  getAgent(id: number): Agent | undefined;
-  getAgentByEmail(email: string): Agent | undefined;
-  getAllAgents(): Agent[];
-  createAgent(data: InsertAgent): Agent;
-  updateAgent(id: number, data: Partial<InsertAgent>): Agent | undefined;
+  getAgent(id: number): Promise<Agent | undefined>;
+  getAgentByEmail(email: string): Promise<Agent | undefined>;
+  getAllAgents(): Promise<Agent[]>;
+  createAgent(data: InsertAgent): Promise<Agent>;
+  updateAgent(id: number, data: Partial<InsertAgent>): Promise<Agent | undefined>;
 
   // Onboarding Tasks
-  getOnboardingTasks(agentId: number): OnboardingTask[];
-  upsertOnboardingTask(data: InsertOnboardingTask): OnboardingTask;
-  updateTaskStatus(agentId: number, taskKey: string, status: string): OnboardingTask | undefined;
+  getOnboardingTasks(agentId: number): Promise<OnboardingTask[]>;
+  upsertOnboardingTask(data: InsertOnboardingTask): Promise<OnboardingTask>;
+  updateTaskStatus(agentId: number, taskKey: string, status: string): Promise<OnboardingTask | undefined>;
 
   // Documents
-  getDocuments(agentId: number): Document[];
-  createDocument(data: InsertDocument): Document;
-  updateDocumentStatus(id: number, status: string): Document | undefined;
+  getDocuments(agentId: number): Promise<Document[]>;
+  getDocument(id: number): Promise<Document | undefined>;
+  createDocument(data: InsertDocument): Promise<Document>;
+  updateDocumentStatus(id: number, status: string): Promise<Document | undefined>;
 
   // ICA Signature
-  getIcaSignature(agentId: number): IcaSignature | undefined;
-  createIcaSignature(data: InsertIcaSignature): IcaSignature;
+  getIcaSignature(agentId: number): Promise<IcaSignature | undefined>;
+  createIcaSignature(data: InsertIcaSignature): Promise<IcaSignature>;
 
   // Training
-  getTrainingProgress(agentId: number): TrainingProgress[];
-  upsertTrainingProgress(agentId: number, moduleKey: string): TrainingProgress;
-  initTrainingModules(agentId: number): void;
+  getTrainingProgress(agentId: number): Promise<TrainingProgress[]>;
+  upsertTrainingProgress(agentId: number, moduleKey: string): Promise<TrainingProgress>;
+  initTrainingModules(agentId: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
   // Agents
-  getAgent(id: number) {
-    return db.select().from(agents).where(eq(agents.id, id)).get();
+  async getAgent(id: number) {
+    await ensureDatabase();
+    const [agent] = await db.select().from(agents).where(eq(agents.id, id));
+    return agent;
   }
-  getAgentByEmail(email: string) {
-    return db.select().from(agents).where(eq(agents.email, email)).get();
+  async getAgentByEmail(email: string) {
+    await ensureDatabase();
+    const [agent] = await db.select().from(agents).where(eq(agents.email, email));
+    return agent;
   }
-  getAllAgents() {
-    return db.select().from(agents).all();
+  async getAllAgents() {
+    await ensureDatabase();
+    return db.select().from(agents).orderBy(asc(agents.id));
   }
-  createAgent(data: InsertAgent) {
-    return db.insert(agents).values(data).returning().get();
+  async createAgent(data: InsertAgent) {
+    await ensureDatabase();
+    const [agent] = await db.insert(agents).values(data).returning();
+    return agent;
   }
-  updateAgent(id: number, data: Partial<InsertAgent>) {
-    return db.update(agents).set(data).where(eq(agents.id, id)).returning().get();
+  async updateAgent(id: number, data: Partial<InsertAgent>) {
+    await ensureDatabase();
+    const [agent] = await db.update(agents).set(data).where(eq(agents.id, id)).returning();
+    return agent;
   }
 
   // Onboarding Tasks
-  getOnboardingTasks(agentId: number) {
-    return db.select().from(onboardingTasks).where(eq(onboardingTasks.agentId, agentId)).all();
+  async getOnboardingTasks(agentId: number) {
+    await ensureDatabase();
+    return db
+      .select()
+      .from(onboardingTasks)
+      .where(eq(onboardingTasks.agentId, agentId))
+      .orderBy(asc(onboardingTasks.stepNumber));
   }
-  upsertOnboardingTask(data: InsertOnboardingTask) {
-    const existing = db.select().from(onboardingTasks)
-      .where(and(eq(onboardingTasks.agentId, data.agentId), eq(onboardingTasks.taskKey, data.taskKey)))
-      .get();
+  async upsertOnboardingTask(data: InsertOnboardingTask) {
+    await ensureDatabase();
+    const [existing] = await db
+      .select()
+      .from(onboardingTasks)
+      .where(and(eq(onboardingTasks.agentId, data.agentId), eq(onboardingTasks.taskKey, data.taskKey)));
     if (existing) {
-      return db.update(onboardingTasks).set(data).where(eq(onboardingTasks.id, existing.id)).returning().get()!;
+      const [task] = await db.update(onboardingTasks).set(data).where(eq(onboardingTasks.id, existing.id)).returning();
+      return task;
     }
-    return db.insert(onboardingTasks).values(data).returning().get();
+    const [task] = await db.insert(onboardingTasks).values(data).returning();
+    return task;
   }
-  updateTaskStatus(agentId: number, taskKey: string, status: string) {
-    const task = db.select().from(onboardingTasks)
-      .where(and(eq(onboardingTasks.agentId, agentId), eq(onboardingTasks.taskKey, taskKey)))
-      .get();
+  async updateTaskStatus(agentId: number, taskKey: string, status: string) {
+    await ensureDatabase();
+    const [task] = await db
+      .select()
+      .from(onboardingTasks)
+      .where(and(eq(onboardingTasks.agentId, agentId), eq(onboardingTasks.taskKey, taskKey)));
     if (!task) return undefined;
-    return db.update(onboardingTasks)
+    const [updatedTask] = await db.update(onboardingTasks)
       .set({ status, completedAt: status === "complete" ? new Date().toISOString() : task.completedAt })
       .where(eq(onboardingTasks.id, task.id))
-      .returning().get();
+      .returning();
+    return updatedTask;
   }
 
   // Documents
-  getDocuments(agentId: number) {
-    return db.select().from(documents).where(eq(documents.agentId, agentId)).all();
+  async getDocuments(agentId: number) {
+    await ensureDatabase();
+    return db.select().from(documents).where(eq(documents.agentId, agentId)).orderBy(asc(documents.id));
   }
-  createDocument(data: InsertDocument) {
-    return db.insert(documents).values(data).returning().get();
+  async getDocument(id: number) {
+    await ensureDatabase();
+    const [document] = await db.select().from(documents).where(eq(documents.id, id));
+    return document;
   }
-  updateDocumentStatus(id: number, status: string) {
-    return db.update(documents).set({ status }).where(eq(documents.id, id)).returning().get();
+  async createDocument(data: InsertDocument) {
+    await ensureDatabase();
+    const [document] = await db.insert(documents).values(data).returning();
+    return document;
+  }
+  async updateDocumentStatus(id: number, status: string) {
+    await ensureDatabase();
+    const [document] = await db.update(documents).set({ status }).where(eq(documents.id, id)).returning();
+    return document;
   }
 
   // ICA
-  getIcaSignature(agentId: number) {
-    return db.select().from(icaSignatures).where(eq(icaSignatures.agentId, agentId)).get();
+  async getIcaSignature(agentId: number) {
+    await ensureDatabase();
+    const [signature] = await db.select().from(icaSignatures).where(eq(icaSignatures.agentId, agentId));
+    return signature;
   }
-  createIcaSignature(data: InsertIcaSignature) {
-    const existing = this.getIcaSignature(data.agentId);
+  async createIcaSignature(data: InsertIcaSignature) {
+    await ensureDatabase();
+    const existing = await this.getIcaSignature(data.agentId);
     if (existing) {
-      return db.update(icaSignatures).set(data).where(eq(icaSignatures.agentId, data.agentId)).returning().get()!;
+      const [signature] = await db.update(icaSignatures).set(data).where(eq(icaSignatures.agentId, data.agentId)).returning();
+      return signature;
     }
-    return db.insert(icaSignatures).values(data).returning().get();
+    const [signature] = await db.insert(icaSignatures).values(data).returning();
+    return signature;
   }
 
   // Training
-  getTrainingProgress(agentId: number) {
-    return db.select().from(trainingProgress).where(eq(trainingProgress.agentId, agentId)).all();
+  async getTrainingProgress(agentId: number) {
+    await ensureDatabase();
+    return db.select().from(trainingProgress).where(eq(trainingProgress.agentId, agentId)).orderBy(asc(trainingProgress.id));
   }
-  initTrainingModules(agentId: number) {
+  async initTrainingModules(agentId: number) {
+    await ensureDatabase();
     const modules = [
       { key: "intro", name: "Welcome to Ocean Luxe" },
       { key: "cold_calling", name: "Cold Calling Mastery" },
@@ -181,25 +154,33 @@ export class DatabaseStorage implements IStorage {
       { key: "crm_walkthrough", name: "CRM Walkthrough" },
     ];
     for (const m of modules) {
-      const exists = db.select().from(trainingProgress)
-        .where(and(eq(trainingProgress.agentId, agentId), eq(trainingProgress.moduleKey, m.key)))
-        .get();
+      const [exists] = await db
+        .select()
+        .from(trainingProgress)
+        .where(and(eq(trainingProgress.agentId, agentId), eq(trainingProgress.moduleKey, m.key)));
       if (!exists) {
-        db.insert(trainingProgress).values({ agentId, moduleKey: m.key, moduleName: m.name }).run();
+        await db.insert(trainingProgress).values({ agentId, moduleKey: m.key, moduleName: m.name });
       }
     }
   }
-  upsertTrainingProgress(agentId: number, moduleKey: string) {
-    const existing = db.select().from(trainingProgress)
-      .where(and(eq(trainingProgress.agentId, agentId), eq(trainingProgress.moduleKey, moduleKey)))
-      .get();
+  async upsertTrainingProgress(agentId: number, moduleKey: string) {
+    await ensureDatabase();
+    const [existing] = await db
+      .select()
+      .from(trainingProgress)
+      .where(and(eq(trainingProgress.agentId, agentId), eq(trainingProgress.moduleKey, moduleKey)));
     if (existing) {
-      return db.update(trainingProgress)
+      const [progress] = await db.update(trainingProgress)
         .set({ completed: true, completedAt: new Date().toISOString() })
         .where(eq(trainingProgress.id, existing.id))
-        .returning().get()!;
+        .returning();
+      return progress;
     }
-    return db.insert(trainingProgress).values({ agentId, moduleKey, moduleName: moduleKey, completed: true, completedAt: new Date().toISOString() }).returning().get();
+    const [progress] = await db
+      .insert(trainingProgress)
+      .values({ agentId, moduleKey, moduleName: moduleKey, completed: true, completedAt: new Date().toISOString() })
+      .returning();
+    return progress;
   }
 }
 
