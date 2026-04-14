@@ -1,8 +1,8 @@
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import { createServer } from "http";
-import { attachSharedAuthUser } from "./auth.ts";
-import { registerRoutes } from "./routes.ts";
-import { serveStatic } from "./static.ts";
+import { attachSharedAuthUser } from "./auth";
+import { registerRoutes } from "./routes";
+import { serveStatic } from "./static";
 
 declare module "http" {
   interface IncomingMessage {
@@ -32,7 +32,6 @@ export async function createApp() {
       },
     }),
   );
-
   app.use(express.urlencoded({ extended: false }));
   app.use(attachSharedAuthUser);
 
@@ -67,7 +66,6 @@ export async function createApp() {
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
-
     console.error("Internal Server Error:", err);
 
     if (res.headersSent) {
@@ -82,7 +80,7 @@ export async function createApp() {
       serveStatic(app);
     }
   } else {
-    const { setupVite } = await import("./vite.ts");
+    const { setupVite } = await import("./vite");
     await setupVite(httpServer, app);
   }
 
