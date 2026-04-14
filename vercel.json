@@ -1,5 +1,4 @@
 {
-  "version": 2,
   "buildCommand": "npm run build",
   "installCommand": "npm install",
   "outputDirectory": "dist/public",
@@ -8,17 +7,14 @@
       "runtime": "nodejs20.x"
     }
   },
-  "routes": [
+  "rewrites": [
     {
-      "src": "/api/(.*)",
-      "dest": "dist/api/index.cjs"
+      "source": "/api/:path*",
+      "destination": "/dist/api/index.cjs"
     },
     {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
