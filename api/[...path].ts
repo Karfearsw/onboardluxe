@@ -1,4 +1,4 @@
-import { createApp } from "../server/app";
+import { createApp } from "../server/app.js";
 
 let appPromise: ReturnType<typeof createApp> | undefined;
 
