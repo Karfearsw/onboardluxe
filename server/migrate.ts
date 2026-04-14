@@ -1,4 +1,4 @@
-import { ensureDatabase, pool } from "./db";
+import { ensureDatabase, pool } from "./db.ts";
 
 (async () => {
   await ensureDatabase();
