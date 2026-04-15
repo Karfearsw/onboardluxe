@@ -1,9 +1,22 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { requireSharedAdmin, requireSharedAuth } from "./auth";
+import { pool } from "./db";
 import { storage } from "./storage";
 import { insertAgentSchema, insertIcaSignatureSchema } from "../shared/schema";
 import { z } from "zod";
+
+const DEFAULT_COOKIE_NAMES = [
+  "__Secure-better-auth.session_token",
+  "better-auth.session_token",
+  "__Secure-authjs.session-token",
+  "authjs.session-token",
+  "__Secure-next-auth.session-token",
+  "next-auth.session-token",
+  "session",
+];
+
+const debugEndpointsEnabled = process.env.DEBUG_ENDPOINTS === "1" || process.env.NODE_ENV !== "production";
 
 const agentUpdateSchema = insertAgentSchema.partial();
 const onboardingStatusSchema = z.object({
@@ -13,7 +26,76 @@ const documentStatusSchema = z.object({
   status: z.enum(["Pending Review", "Approved", "Rejected"]),
 });
 
+function parseCookies(cookieHeader?: string) {
+  const cookies = new Map<string, string>();
+
+  if (!cookieHeader) {
+    return cookies;
+  }
+
+  for (const part of cookieHeader.split(";")) {
+    const [rawName, ...rawValue] = part.trim().split("=");
+    if (!rawName) continue;
+    cookies.set(rawName, decodeURIComponent(rawValue.join("=")));
+  }
+
+  return cookies;
+}
+
+function getConfiguredCookieNames() {
+  const configured = process.env.AUTH_COOKIE_NAMES?.split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  return configured?.length ? configured : DEFAULT_COOKIE_NAMES;
+}
+
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
+  if (debugEndpointsEnabled) {
+    app.get("/api/health", async (_req, res) => {
+      try {
+        await pool.query("select 1 as ok");
+        res.json({ ok: true });
+      } catch (e) {
+        const error = e instanceof Error ? e : new Error(String(e));
+        res.status(500).json({ ok: false, message: error.message });
+      }
+    });
+
+    app.get("/api/debug/auth", async (req, res) => {
+      const cookies = parseCookies(req.headers.cookie);
+      const cookieNames = getConfiguredCookieNames();
+      const matchedCookieName = cookieNames.find((name) => cookies.has(name)) ?? null;
+
+      let dbOk = true;
+      try {
+        await pool.query("select 1 as ok");
+      } catch {
+        dbOk = false;
+      }
+
+      const authUser = req.authUser ?? null;
+
+      res.json({
+        dbOk,
+        hasSessionCookie: Boolean(matchedCookieName),
+        matchedCookieName,
+        hasAuthUser: Boolean(authUser),
+        authUser: authUser
+          ? {
+              id: authUser.id,
+              email: authUser.email,
+              name: authUser.name,
+              role: authUser.role,
+              organizationId: authUser.organizationId,
+              organizationSlug: authUser.organizationSlug,
+              organizationRole: authUser.organizationRole,
+            }
+          : null,
+      });
+    });
+  }
+
   // ── Agents ────────────────────────────────────────────────────────────────
   app.get("/api/agents", requireSharedAdmin, async (_req, res) => {
     const all = await storage.getAllAgents();
@@ -54,7 +136,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       await storage.initTrainingModules(agent.id);
       res.status(201).json(agent);
     } catch (e: any) {
-      res.status(400).json({ message: e.message });
+      if (e instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid registration payload", issues: e.issues });
+      }
+
+      const error = e instanceof Error ? e : new Error(String(e));
+      const code = (e as { code?: unknown } | null)?.code;
+
+      if (code === "23505") {
+        return res.status(409).json({ message: "An agent with this email already exists." });
+      }
+
+      console.error("Agent registration failed:", error);
+      return res.status(500).json({ message: error.message || "Internal Server Error" });
     }
   });
 
