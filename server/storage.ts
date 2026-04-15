@@ -1,13 +1,13 @@
 import { and, asc, eq } from "drizzle-orm";
-import { db, ensureDatabase } from "./db";
-import { agents, onboardingTasks, documents, icaSignatures, trainingProgress } from "../shared/schema";
+import { db, ensureDatabase } from "./db.js";
+import { agents, onboardingTasks, documents, icaSignatures, trainingProgress } from "../shared/schema.js";
 import type {
   Agent, InsertAgent,
   OnboardingTask, InsertOnboardingTask,
   Document, InsertDocument,
   IcaSignature, InsertIcaSignature,
   TrainingProgress, InsertTrainingProgress,
-} from "../shared/schema";
+} from "../shared/schema.js";
 
 export interface IStorage {
   // Agents

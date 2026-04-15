@@ -1,9 +1,9 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { requireSharedAdmin, requireSharedAuth } from "./auth";
-import { pool } from "./db";
-import { storage } from "./storage";
-import { insertAgentSchema, insertIcaSignatureSchema } from "../shared/schema";
+import { requireSharedAdmin, requireSharedAuth } from "./auth.js";
+import { pool } from "./db.js";
+import { storage } from "./storage.js";
+import { insertAgentSchema, insertIcaSignatureSchema } from "../shared/schema.js";
 import { z } from "zod";
 
 const DEFAULT_COOKIE_NAMES = [

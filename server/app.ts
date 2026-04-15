@@ -1,8 +1,8 @@
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import { createServer } from "http";
-import { attachSharedAuthUser } from "./auth";
-import { registerRoutes } from "./routes";
-import { serveStatic } from "./static";
+import { attachSharedAuthUser } from "./auth.js";
+import { registerRoutes } from "./routes.js";
+import { serveStatic } from "./static.js";
 
 declare module "http" {
   interface IncomingMessage {
@@ -80,7 +80,7 @@ export async function createApp() {
       serveStatic(app);
     }
   } else {
-    const { setupVite } = await import("./vite");
+    const { setupVite } = await import("./vite.js");
     await setupVite(httpServer, app);
   }
 

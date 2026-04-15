@@ -1,6 +1,8 @@
 import { build as esbuild } from "esbuild";
 import { build as viteBuild } from "vite";
 import { rm, readFile } from "fs/promises";
+import fs from "fs";
+import path from "path";
 
 // server deps to bundle to reduce openat(2) syscalls
 // which helps cold start times
@@ -43,6 +45,28 @@ async function buildAll() {
     ...Object.keys(pkg.devDependencies || {}),
   ];
   const externals = allDeps.filter((dep) => !allowlist.includes(dep));
+  const resolveTsForJsImportsPlugin = {
+    name: "resolve-ts-for-js-imports",
+    setup(build: any) {
+      build.onResolve({ filter: /^\.\.?\// }, (args: any) => {
+        if (!args.path.endsWith(".js")) {
+          return null;
+        }
+
+        const candidate = path.join(args.resolveDir, args.path);
+        if (fs.existsSync(candidate)) {
+          return null;
+        }
+
+        const tsCandidate = path.join(args.resolveDir, `${args.path.slice(0, -3)}.ts`);
+        if (fs.existsSync(tsCandidate)) {
+          return { path: tsCandidate };
+        }
+
+        return null;
+      });
+    },
+  };
 
   console.log("building server (local)...");
   await esbuild({
@@ -56,6 +80,7 @@ async function buildAll() {
     },
     minify: true,
     external: externals,
+    plugins: [resolveTsForJsImportsPlugin],
     logLevel: "info",
   });
 
@@ -71,6 +96,7 @@ async function buildAll() {
     },
     minify: true,
     external: externals,
+    plugins: [resolveTsForJsImportsPlugin],
     logLevel: "info",
   });
 }

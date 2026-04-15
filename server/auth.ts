@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import { pool } from "./db";
+import { pool } from "./db.js";
 
 const DEFAULT_COOKIE_NAMES = [
   "__Secure-better-auth.session_token",
