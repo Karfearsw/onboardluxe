@@ -3,24 +3,21 @@
   "installCommand": "npm install",
   "builds": [
     {
-      "src": "api/[...path].ts",
-      "use": "@vercel/node",
-      "config": {
-        "includeFiles": ["server/**", "shared/**"]
-      }
-    },
-    {
       "src": "package.json",
       "use": "@vercel/static-build",
       "config": {
         "distDir": "dist/public"
       }
+    },
+    {
+      "src": "dist/api/index.cjs",
+      "use": "@vercel/node"
     }
   ],
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "api/[...path].ts"
+      "dest": "dist/api/index.cjs"
     },
     {
       "handle": "filesystem"
