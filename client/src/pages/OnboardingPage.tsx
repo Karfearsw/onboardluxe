@@ -273,16 +273,23 @@ function DocumentUploadStep({
 function PayoutStep({ agentId, onComplete }: { agentId: number; onComplete: () => void }) {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const [method, setMethod] = useState("");
+  const [method, setMethod] = useState("SoFi");
   const [details, setDetails] = useState("");
-  const [sofi, setSofi] = useState(false);
+  const [bankName, setBankName] = useState("");
+  const [bankLast4, setBankLast4] = useState("");
+  const [sofiOptIn, setSofiOptIn] = useState(true);
+  const [sofiLinkOpened, setSofiLinkOpened] = useState(false);
 
   const { mutate, isPending } = useMutation({
     mutationFn: async () => {
+      const payloadDetails = method === "Bank Transfer"
+        ? `${bankName ? `${bankName} ` : ""}•••• ${bankLast4}`.trim()
+        : details.trim();
+
       await apiRequest("POST", `/api/agents/${agentId}/payout`, {
         payoutMethodType: method,
-        payoutDetails: details,
-        sofiReferralStatus: sofi ? "Invited" : "Declined",
+        payoutDetails: payloadDetails,
+        sofiReferralStatus: sofiOptIn ? (sofiLinkOpened ? "Opened" : "Invited") : "Declined",
       });
     },
     onSuccess: () => {
@@ -292,6 +299,40 @@ function PayoutStep({ agentId, onComplete }: { agentId: number; onComplete: () =
     },
     onError: () => toast({ title: "Error saving payout", variant: "destructive" }),
   });
+
+  const isBank = method === "Bank Transfer";
+  const isSoFi = method === "SoFi";
+  const sofiLink = (import.meta as any).env?.VITE_SOFI_REFERRAL_LINK as string | undefined;
+
+  const canSave = (() => {
+    if (isPending) return false;
+    if (!method) return false;
+    if (isBank) {
+      return /^\d{4}$/.test(bankLast4.trim());
+    }
+    return Boolean(details.trim());
+  })();
+
+  const openSofiLink = async () => {
+    const link = sofiLink || "https://www.sofi.com/invite/relay?gcp=c9a39588-1748-482c-846b-265e608a8e2a&isAliasGcp=false";
+    window.open(link, "_blank", "noreferrer");
+    setSofiLinkOpened(true);
+    try {
+      await apiRequest("POST", `/api/agents/${agentId}/sofi/opened`, {});
+      qc.invalidateQueries({ queryKey: ["/api/agents", agentId] });
+    } catch {
+    }
+  };
+
+  const copySofiLink = async () => {
+    const link = sofiLink || "https://www.sofi.com/invite/relay?gcp=c9a39588-1748-482c-846b-265e608a8e2a&isAliasGcp=false";
+    try {
+      await navigator.clipboard.writeText(link);
+      toast({ title: "Copied", description: "SoFi referral link copied to clipboard." });
+    } catch {
+      toast({ title: "Copy failed", description: "Could not copy link.", variant: "destructive" });
+    }
+  };
 
   return (
     <div className="space-y-5">
@@ -304,7 +345,10 @@ function PayoutStep({ agentId, onComplete }: { agentId: number; onComplete: () =
             <button
               key={m}
               data-testid={`payout-${m.toLowerCase().replace(" ", "-")}`}
-              onClick={() => setMethod(m)}
+              onClick={() => {
+                setMethod(m);
+                if (m === "SoFi") setSofiOptIn(true);
+              }}
               className={`border rounded-xl p-3 text-sm font-medium transition-all ${
                 method === m
                   ? "border-primary bg-primary/5 text-primary"
@@ -317,17 +361,34 @@ function PayoutStep({ agentId, onComplete }: { agentId: number; onComplete: () =
         </div>
       </div>
 
-      {method && (
+      {isBank ? (
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label>Bank Name (optional)</Label>
+            <Input value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="e.g. Chase" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Account Last 4 Digits</Label>
+            <Input
+              data-testid="input-payout-details"
+              inputMode="numeric"
+              value={bankLast4}
+              onChange={(e) => setBankLast4(e.target.value.replace(/\D/g, "").slice(0, 4))}
+              placeholder="e.g. 4521"
+            />
+            <p className="text-xs text-muted-foreground">Do not enter your full account or routing number.</p>
+          </div>
+        </div>
+      ) : (
         <div className="space-y-1.5">
           <Label>
             {method === "SoFi" ? "SoFi Account Email" :
              method === "PayPal" ? "PayPal Email or Username" :
-             method === "Zelle" ? "Zelle Phone or Email" :
-             "Bank Account (last 4 digits only — not your full number)"}
+             "Zelle Phone or Email"}
           </Label>
           <Input
             data-testid="input-payout-details"
-            placeholder={method === "Bank Transfer" ? "e.g. •••• 4521" : "Enter your account info"}
+            placeholder={method === "SoFi" ? "name@email.com" : "Enter your account info"}
             value={details}
             onChange={e => setDetails(e.target.value)}
           />
@@ -336,29 +397,37 @@ function PayoutStep({ agentId, onComplete }: { agentId: number; onComplete: () =
 
       {/* SoFi referral offer */}
       <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-4">
-        <p className="text-sm font-semibold text-amber-800 dark:text-amber-300 mb-1">Recommended: SoFi Checking & Savings</p>
+        <p className="text-sm font-semibold text-amber-800 dark:text-amber-300 mb-1">Team Standard: SoFi</p>
         <p className="text-xs text-amber-700 dark:text-amber-400 mb-3">
-          Ocean Luxe recommends SoFi for the fastest payouts. Opening a SoFi account via our referral link may qualify you for a bank bonus (eligibility depends on SoFi's current offer).
+          Join our team’s preferred payout setup with SoFi. You’ll earn $10 in rewards points when you activate free credit score monitoring—and you can track all your finances in one dashboard.
         </p>
-        <div className="flex items-start gap-2">
+        <div className="flex items-start gap-2 mb-3">
           <input
             type="checkbox"
             id="sofi-opt"
             data-testid="checkbox-sofi"
-            checked={sofi}
-            onChange={e => setSofi(e.target.checked)}
+            checked={sofiOptIn}
+            onChange={e => setSofiOptIn(e.target.checked)}
             className="mt-0.5 accent-amber-500"
           />
           <label htmlFor="sofi-opt" className="text-xs text-amber-700 dark:text-amber-400 cursor-pointer">
-            Yes, I'd like to receive the SoFi referral link (optional — choosing a different method will not affect my pay)
+            I want the SoFi invite link (recommended)
           </label>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="secondary" size="sm" onClick={openSofiLink}>
+            Open SoFi Invite →
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={copySofiLink}>
+            Copy Link
+          </Button>
         </div>
       </div>
 
       <Button
         data-testid="btn-save-payout"
         onClick={() => mutate()}
-        disabled={!method || !details || isPending}
+        disabled={!canSave}
         className="w-full"
       >
         {isPending ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Saving...</> : "Save Payout Method →"}

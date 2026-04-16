@@ -16,6 +16,46 @@ const onboardingStatusSchema = z.object({
 const documentStatusSchema = z.object({
   status: z.enum(["Pending Review", "Approved", "Rejected"]),
 });
+const payoutSchema = z.object({
+  payoutMethodType: z.enum(["SoFi", "PayPal", "Bank Transfer", "Zelle"]),
+  payoutDetails: z.string().trim().min(1),
+  sofiReferralStatus: z.enum(["Not Invited", "Invited", "Opened", "Bonus Confirmed", "Declined"]).optional(),
+  sofiReferralLink: z.string().trim().optional(),
+});
+
+function validatePayoutDetails(payoutMethodType: string, payoutDetails: string) {
+  const value = payoutDetails.trim();
+
+  if (payoutMethodType === "SoFi") {
+    const ok = z.string().email().safeParse(value).success;
+    if (!ok) return "Enter a valid SoFi account email.";
+    return null;
+  }
+
+  if (payoutMethodType === "Bank Transfer") {
+    if (/\d{5,}/.test(value)) {
+      return "For security, enter bank name and last 4 digits only (no full account/routing numbers).";
+    }
+    if (!/\b\d{4}\b/.test(value)) {
+      return "Enter last 4 digits (e.g. 4521).";
+    }
+    return null;
+  }
+
+  if (payoutMethodType === "PayPal") {
+    if (!value) return "Enter a PayPal email or username.";
+    return null;
+  }
+
+  if (payoutMethodType === "Zelle") {
+    const emailOk = z.string().email().safeParse(value).success;
+    const phoneOk = /^\+?[0-9()\-.\s]{7,}$/.test(value);
+    if (!emailOk && !phoneOk) return "Enter a valid Zelle phone number or email.";
+    return null;
+  }
+
+  return "Invalid payout method.";
+}
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
   if (debugEndpointsEnabled) {
@@ -264,17 +304,49 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // ── Payout Setup ──────────────────────────────────────────────────────────
   app.post("/api/agents/:id/payout", async (req, res) => {
-    const { payoutMethodType, payoutDetails, sofiReferralStatus } = req.body;
+    const parsed = payoutSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid payout payload", issues: parsed.error.issues });
+    }
+
+    const {
+      payoutMethodType,
+      payoutDetails,
+      sofiReferralStatus: rawSofiReferralStatus,
+      sofiReferralLink: rawSofiReferralLink,
+    } = parsed.data;
+
+    const validationError = validatePayoutDetails(payoutMethodType, payoutDetails);
+    if (validationError) {
+      return res.status(400).json({ message: validationError });
+    }
+
+    const envLink = process.env.SOFI_REFERRAL_LINK?.trim() ?? "";
+    const sofiReferralStatus = rawSofiReferralStatus || "Not Invited";
+    const shouldAttachLink = ["Invited", "Opened", "Bonus Confirmed"].includes(sofiReferralStatus);
+    const sofiReferralLink = (rawSofiReferralLink?.trim() || (shouldAttachLink ? envLink : "")).trim();
+
     const agent = await storage.updateAgent(Number(req.params.id), {
       payoutMethodType,
       payoutDetails,
-      sofiReferralStatus: sofiReferralStatus || "Not Invited",
+      sofiReferralStatus,
+      sofiReferralLink,
     });
     if (!agent) return res.status(404).json({ message: "Agent not found" });
     await storage.updateTaskStatus(Number(req.params.id), "payout", "complete");
     void sendDiscordWebhook("agent.payout_submitted", { agent }).catch((error) => {
       console.error("Discord webhook failed (agent.payout_submitted):", error);
     });
+    res.json(agent);
+  });
+
+  app.post("/api/agents/:id/sofi/opened", async (req, res) => {
+    const envLink = process.env.SOFI_REFERRAL_LINK?.trim() ?? "";
+    const agent = await storage.updateAgent(Number(req.params.id), {
+      sofiReferralStatus: "Opened",
+      sofiReferralLink: envLink,
+    });
+    if (!agent) return res.status(404).json({ message: "Agent not found" });
     res.json(agent);
   });
 

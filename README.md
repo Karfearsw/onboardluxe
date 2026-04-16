@@ -54,6 +54,11 @@ NODE_ENV=production node dist/index.cjs
 
 - Set `DISCORD_WEBHOOK_URL` to enable event notifications (agent created, docs added, ICA signed, payout/training updates).
 
+## SoFi Referral Link (Optional)
+
+- Set `SOFI_REFERRAL_LINK` to display the team’s recommended SoFi referral link inside the Payout Setup step and to track referral status (`Invited`/`Opened`/`Bonus Confirmed`).
+- Also set `VITE_SOFI_REFERRAL_LINK` to expose the same link to the frontend build (Vite only exposes variables prefixed with `VITE_`).
+
 ## Debug Endpoints (Optional)
 
 - Set `DEBUG_ENDPOINTS=1` to temporarily enable:

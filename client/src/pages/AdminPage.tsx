@@ -142,6 +142,7 @@ export default function AdminPage() {
     payoutMethodType: "",
     payoutDetails: "",
     sofiReferralStatus: "Not Invited",
+    sofiReferralLink: "",
     performanceNotes: "",
     crmRecordId: "",
     crmPipelineStage: "Applicant",
@@ -260,6 +261,7 @@ export default function AdminPage() {
       payoutMethodType: selectedAgentDetails.agent.payoutMethodType || "",
       payoutDetails: selectedAgentDetails.agent.payoutDetails || "",
       sofiReferralStatus: selectedAgentDetails.agent.sofiReferralStatus,
+      sofiReferralLink: selectedAgentDetails.agent.sofiReferralLink || "",
       performanceNotes: selectedAgentDetails.agent.performanceNotes || "",
       crmRecordId: selectedAgentDetails.agent.crmRecordId || "",
       crmPipelineStage: selectedAgentDetails.agent.crmPipelineStage || "Applicant",
@@ -609,6 +611,25 @@ export default function AdminPage() {
                           <option key={status} value={status}>{status}</option>
                         ))}
                       </select>
+                    </label>
+
+                    <label className="space-y-1 sm:col-span-2">
+                      <span className="text-xs uppercase tracking-widest text-muted-foreground">SoFi Referral Link</span>
+                      <Input
+                        value={editForm.sofiReferralLink}
+                        onChange={(e) => setEditForm((current) => ({ ...current, sofiReferralLink: e.target.value }))}
+                        placeholder="https://www.sofi.com/invite/relay?..."
+                      />
+                      {editForm.sofiReferralLink ? (
+                        <a
+                          href={editForm.sofiReferralLink}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs text-muted-foreground hover:text-foreground"
+                        >
+                          Open link →
+                        </a>
+                      ) : null}
                     </label>
 
                     <label className="space-y-1">
