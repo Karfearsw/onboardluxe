@@ -61,6 +61,18 @@ NODE_ENV=production node dist/index.cjs
   - `GET /api/health`
   - `GET /api/debug/auth`
 
+## Admin SSO (Deals → HR)
+
+- HR admin auth reuses the CRM session cookie.
+- This will not work on `*.vercel.app`. HR must be served on `career.oceanluxe.org` (same root domain).
+
+Required Vercel env vars for HR:
+
+- `AUTH_MODE=express_session`
+- `AUTH_COOKIE_NAMES=connect.sid`
+- `SESSION_SECRET` (must match the CRM `express-session` secret)
+- `SESSION_TABLE=session` (default for connect-pg-simple)
+
 ## Brand
 
 - Colors: Black `#0a0a0a` · Gold `hsl(43,85%,52%)` · White

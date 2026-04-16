@@ -1,22 +1,11 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { requireSharedAdmin, requireSharedAuth } from "./auth.js";
+import { getSharedAuthDiagnostics, requireSharedAdmin, requireSharedAuth } from "./auth.js";
 import { pool } from "./db.js";
 import { sendDiscordWebhook } from "./discord.js";
 import { storage } from "./storage.js";
 import { insertAgentSchema, insertIcaSignatureSchema } from "../shared/schema.js";
 import { z } from "zod";
-
-const DEFAULT_COOKIE_NAMES = [
-  "connect.sid",
-  "__Secure-better-auth.session_token",
-  "better-auth.session_token",
-  "__Secure-authjs.session-token",
-  "authjs.session-token",
-  "__Secure-next-auth.session-token",
-  "next-auth.session-token",
-  "session",
-];
 
 const debugEndpointsEnabled = process.env.DEBUG_ENDPOINTS === "1" || process.env.NODE_ENV !== "production";
 
@@ -27,30 +16,6 @@ const onboardingStatusSchema = z.object({
 const documentStatusSchema = z.object({
   status: z.enum(["Pending Review", "Approved", "Rejected"]),
 });
-
-function parseCookies(cookieHeader?: string) {
-  const cookies = new Map<string, string>();
-
-  if (!cookieHeader) {
-    return cookies;
-  }
-
-  for (const part of cookieHeader.split(";")) {
-    const [rawName, ...rawValue] = part.trim().split("=");
-    if (!rawName) continue;
-    cookies.set(rawName, decodeURIComponent(rawValue.join("=")));
-  }
-
-  return cookies;
-}
-
-function getConfiguredCookieNames() {
-  const configured = process.env.AUTH_COOKIE_NAMES?.split(",")
-    .map((value) => value.trim())
-    .filter(Boolean);
-
-  return configured?.length ? configured : DEFAULT_COOKIE_NAMES;
-}
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
   if (debugEndpointsEnabled) {
@@ -83,11 +48,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
 
     app.get("/api/debug/auth", async (req, res) => {
-      const cookies = parseCookies(req.headers.cookie);
-      const cookieNames = getConfiguredCookieNames();
-      const matchedCookieName = cookieNames.find((name) => cookies.has(name)) ?? null;
-
-
       let dbOk = true;
       try {
         await pool.query("select 1 as ok");
@@ -95,25 +55,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         dbOk = false;
       }
 
-      const authUser = req.authUser ?? null;
-
-      res.json({
-        dbOk,
-        hasSessionCookie: Boolean(matchedCookieName),
-        matchedCookieName,
-        hasAuthUser: Boolean(authUser),
-        authUser: authUser
-          ? {
-              id: authUser.id,
-              email: authUser.email,
-              name: authUser.name,
-              role: authUser.role,
-              organizationId: authUser.organizationId,
-              organizationSlug: authUser.organizationSlug,
-              organizationRole: authUser.organizationRole,
-            }
-          : null,
-      });
+      const diagnostics = await getSharedAuthDiagnostics(req);
+      res.json({ dbOk, ...diagnostics });
     });
   }
 
@@ -155,7 +98,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // Mark first step in progress
       await storage.updateTaskStatus(agent.id, "profile", "in_progress");
       await storage.initTrainingModules(agent.id);
-      void sendDiscordWebhook("agent.created", { agent });
+      void sendDiscordWebhook("agent.created", { agent }).catch((error) => {
+        console.error("Discord webhook failed (agent.created):", error);
+      });
       res.status(201).json(agent);
     } catch (e: any) {
       if (e instanceof z.ZodError) {
@@ -277,7 +222,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const sig = await storage.createIcaSignature(data);
       // Mark ICA task complete
       await storage.updateTaskStatus(Number(req.params.id), "ica", "complete");
-      void sendDiscordWebhook("agent.ica_signed", { agentId: Number(req.params.id), signature: sig });
+      void sendDiscordWebhook("agent.ica_signed", { agentId: Number(req.params.id), signature: sig }).catch((error) => {
+        console.error("Discord webhook failed (agent.ica_signed):", error);
+      });
       res.status(201).json(sig);
     } catch (e: any) {
       res.status(400).json({ message: e.message });
@@ -306,7 +253,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (taskKeyMap[docType]) {
         await storage.updateTaskStatus(Number(req.params.id), taskKeyMap[docType], "complete");
       }
-      void sendDiscordWebhook("agent.document_added", { agentId: Number(req.params.id), document: doc });
+      void sendDiscordWebhook("agent.document_added", { agentId: Number(req.params.id), document: doc }).catch((error) => {
+        console.error("Discord webhook failed (agent.document_added):", error);
+      });
       res.status(201).json(doc);
     } catch (e: any) {
       res.status(400).json({ message: e.message });
@@ -323,7 +272,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
     if (!agent) return res.status(404).json({ message: "Agent not found" });
     await storage.updateTaskStatus(Number(req.params.id), "payout", "complete");
-    void sendDiscordWebhook("agent.payout_submitted", { agent });
+    void sendDiscordWebhook("agent.payout_submitted", { agent }).catch((error) => {
+      console.error("Discord webhook failed (agent.payout_submitted):", error);
+    });
     res.json(agent);
   });
 
@@ -340,7 +291,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (all.length > 0 && all.every((m) => m.completed)) {
       await storage.updateTaskStatus(Number(req.params.id), "training", "complete");
     }
-    void sendDiscordWebhook("agent.training_completed", { agentId: Number(req.params.id), moduleKey: req.params.moduleKey, progress });
+    void sendDiscordWebhook("agent.training_completed", { agentId: Number(req.params.id), moduleKey: req.params.moduleKey, progress }).catch((error) => {
+      console.error("Discord webhook failed (agent.training_completed):", error);
+    });
     res.json(progress);
   });
 

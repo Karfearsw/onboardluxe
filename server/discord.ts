@@ -53,7 +53,9 @@ async function postJson(url: string, body: DiscordWebhookPayload) {
   });
 
   if (!res.ok) {
-    throw new Error(`Discord webhook failed: ${res.status}`);
+    const text = await res.text().catch(() => "");
+    const detail = text.length > 400 ? `${text.slice(0, 400)}…` : text;
+    throw new Error(`Discord webhook failed: ${res.status}${detail ? ` ${detail}` : ""}`);
   }
 }
 
@@ -69,7 +71,9 @@ async function postWithFile(url: string, body: DiscordWebhookPayload, filename: 
   const res = await fetch(url, { method: "POST", body: form });
 
   if (!res.ok) {
-    throw new Error(`Discord webhook failed: ${res.status}`);
+    const text = await res.text().catch(() => "");
+    const detail = text.length > 400 ? `${text.slice(0, 400)}…` : text;
+    throw new Error(`Discord webhook failed: ${res.status}${detail ? ` ${detail}` : ""}`);
   }
 }
 
@@ -88,4 +92,3 @@ export async function sendDiscordWebhook(event: string, payload: unknown) {
 
   await postWithFile(url, { content: `${header}\n(payload attached)` }, "payload.json", json);
 }
-
