@@ -392,9 +392,28 @@ function TrainingStep({ agentId, onComplete }: { agentId: number; onComplete: ()
 
   const allDone = progress.length > 0 && progress.every(m => m.completed);
   const doneCount = progress.filter(m => m.completed).length;
+  const trainingUrl = `/training/training-bundle.html?agentId=${agentId}`;
 
   return (
     <div className="space-y-5">
+      <div className="flex flex-col gap-3 rounded-xl border bg-card p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold">Ocean Luxe Training</p>
+            <p className="text-xs text-muted-foreground">Open the course and complete each lesson quiz to mark modules complete.</p>
+          </div>
+          <a
+            href={trainingUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs font-medium text-primary hover:underline whitespace-nowrap"
+          >
+            Open Training →
+          </a>
+        </div>
+        <p className="text-[11px] text-muted-foreground break-all">{trainingUrl}</p>
+      </div>
+
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">Complete all 5 training modules to finish onboarding.</p>
         <Badge variant="outline">{doneCount}/{TRAINING_MODULES.length}</Badge>

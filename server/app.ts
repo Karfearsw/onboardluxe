@@ -3,6 +3,7 @@ import { createServer } from "http";
 import { attachSharedAuthUser } from "./auth.js";
 import { registerRoutes } from "./routes.js";
 import { serveStatic } from "./static.js";
+import path from "path";
 
 declare module "http" {
   interface IncomingMessage {
@@ -34,6 +35,7 @@ export async function createApp() {
   );
   app.use(express.urlencoded({ extended: false }));
   app.use(attachSharedAuthUser);
+  app.use("/training", express.static(path.resolve(process.cwd(), "script")));
 
   app.use((req, res, next) => {
     const start = Date.now();

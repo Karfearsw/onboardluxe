@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ocean Luxe — New Agent Onboarding (SCORM)</title>
+    <script src="config.js"></script>
+    <script src="scorm_api_wrapper.js"></script>
+    <style>
+      html, body { height: 100%; margin: 0; }
+      body { background: #0a0908; }
+      .frame {
+        width: 100%;
+        height: 100%;
+        border: 0;
+        display: block;
+        background: #0a0908;
+      }
+      .fallback {
+        color: #e8e4d8;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+        padding: 24px;
+        display: none;
+      }
+      .fallback a { color: #C9A84C; }
+    </style>
+  </head>
+  <body>
+    <iframe class="frame" id="trainingFrame" title="Ocean Luxe Training" src="training-bundle.html"></iframe>
+    <div class="fallback" id="fallback">
+      <h2>Training content did not load</h2>
+      <p>Your LMS may be blocking iframes or mixed content. Try opening: <a id="directLink" href="training-bundle.html">training-bundle.html</a></p>
+    </div>
+
+    <script>
+      (function () {
+        var connected = false;
+        try {
+          connected = window.Scorm12 && window.Scorm12.init();
+        } catch (e) {}
+
+        // Set initial status (don’t overwrite if already completed/passed).
+        if (connected) {
+          var status = window.Scorm12.get('cmi.core.lesson_status');
+          if (!status || status === 'not attempted') {
+            window.Scorm12.set('cmi.core.lesson_status', 'incomplete');
+            window.Scorm12.commit();
+          }
+        }
+
+        var frame = document.getElementById('trainingFrame');
+        var fallback = document.getElementById('fallback');
+        var direct = document.getElementById('directLink');
+        if (direct) direct.href = 'training-bundle.html';
+
+        // Basic iframe load fallback
+        var loadTimer = setTimeout(function () {
+          // If the LMS blocks iframe, this may never fire; show help.
+          if (fallback) fallback.style.display = 'block';
+        }, 8000);
+        frame.addEventListener('load', function () {
+          clearTimeout(loadTimer);
+        });
+
+        // Listen for training completion events from inside the iframe.
+        window.addEventListener('message', function (event) {
+          var data = event && event.data;
+          if (!data || data.source !== 'oceanluxe-training') return;
+
+          if (data.type === 'courseCompleted') {
+            if (connected) {
+              // Score
+              if (typeof data.scorePercent === 'number') {
+                window.Scorm12.set('cmi.core.score.raw', Math.round(data.scorePercent));
+                window.Scorm12.set('cmi.core.score.min', 0);
+                window.Scorm12.set('cmi.core.score.max', 100);
+              }
+
+              // Status
+              var nextStatus = data.passed ? 'passed' : 'completed';
+              window.Scorm12.set('cmi.core.lesson_status', nextStatus);
+              window.Scorm12.commit();
+            }
+          }
+        });
+
+        // Ensure we attempt to commit/finish on exit.
+        window.addEventListener('beforeunload', function () {
+          if (!connected) return;
+          try { window.Scorm12.commit(); } catch (e) {}
+          try { window.Scorm12.finish(); } catch (e) {}
+        });
+      })();
+    </script>
+  </body>
+</html>
+

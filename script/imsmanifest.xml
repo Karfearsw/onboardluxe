@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<manifest
+  identifier="MANIFEST-OCEANLUXE-ONBOARDING"
+  version="1.2"
+  xmlns="http://www.imsproject.org/xsd/imscp_rootv1p1p2"
+  xmlns:adlcp="http://www.adlnet.org/xsd/adlcp_rootv1p2"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="
+    http://www.imsproject.org/xsd/imscp_rootv1p1p2 imscp_rootv1p1p2.xsd
+    http://www.adlnet.org/xsd/adlcp_rootv1p2 adlcp_rootv1p2.xsd">
+
+  <organizations default="ORG-OCEANLUXE">
+    <organization identifier="ORG-OCEANLUXE">
+      <title>Ocean Luxe New Agent Onboarding</title>
+      <item identifier="ITEM-OCEANLUXE-COURSE" identifierref="RES-OCEANLUXE-COURSE" isvisible="true">
+        <title>Ocean Luxe New Agent Onboarding</title>
+      </item>
+    </organization>
+  </organizations>
+
+  <resources>
+    <resource
+      identifier="RES-OCEANLUXE-COURSE"
+      type="webcontent"
+      adlcp:scormtype="sco"
+      href="index.html">
+      <file href="index.html" />
+      <file href="imsmanifest.xml" />
+      <file href="scorm_api_wrapper.js" />
+      <file href="config.js" />
+
+      <!-- Training content (copied from /workspace/oceanluxe-training-site) -->
+      <file href="training-bundle.html" />
+      <file href="app.js" />
+      <file href="style.css" />
+      <file href="lesson-01.html" />
+      <file href="lesson-02.html" />
+      <file href="lesson-03.html" />
+      <file href="lesson-04.html" />
+      <file href="lesson-05.html" />
+    </resource>
+  </resources>
+</manifest>
+

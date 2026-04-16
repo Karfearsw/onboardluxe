@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lesson 05 — CRM Walkthrough | Training</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@300..700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <header class="nav">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-logo">
+        <svg width="32" height="32" viewBox="0 0 40 40" fill="none"><path d="M20 4C11.163 4 4 11.163 4 20c0 6.19 3.39 11.6 8.4 14.5L20 36l7.6-1.5C32.61 31.6 36 26.19 36 20 36 11.163 28.837 4 20 4z" fill="#C9A84C" opacity="0.15"/><path d="M8 22c2-4 5-7 8-8 1.5 5 4 9 7 11 1-4 3-7 6-9 1 3 1.5 6 1 9-2.5 2-5 3-8 3-4 0-8-2-11-5l-3-1z" fill="#C9A84C" opacity="0.6"/><circle cx="20" cy="20" r="3" fill="#C9A84C"/></svg>
+        <span class="nav-brand">Ocean Luxe <em>Training</em></span>
+      </a>
+      <div class="nav-right">
+        <div class="nav-progress-pill">
+          <span id="navProgressText">0 / 5 complete</span>
+          <div class="nav-progress-track"><div class="nav-progress-fill" id="navProgressFill" style="width:0%"></div></div>
+        </div>
+        <button class="theme-toggle" data-theme-toggle><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></button>
+      </div>
+    </div>
+  </header>
+
+  <div class="lesson-layout">
+    <main class="lesson-main">
+      <nav class="lesson-breadcrumb">
+        <a href="index.html">Course Home</a><span>›</span><span>Lesson 05</span>
+      </nav>
+
+      <header class="lesson-header">
+        <div class="lesson-eyebrow">RE-OL-05 · Final Lesson</div>
+        <h1 class="lesson-title">CRM Walkthrough</h1>
+        <div class="lesson-meta-row">
+          <span>New Hire · SDR · Agent</span>
+          <span>Prerequisites: Lessons 02 & 03</span>
+          <span>Assessment: Hands-on Checklist</span>
+        </div>
+      </header>
+
+      <div class="lesson-content">
+
+        <section class="lesson-section">
+          <h2 class="lesson-section-title">Why the CRM Matters</h2>
+          <p class="lesson-text">The CRM is how Ocean Luxe stays coordinated across the team. Clean data and consistent logging protect the customer experience and prevent leads from falling through the cracks. Every missed log is a potential missed deal — or a bad handoff to a teammate.</p>
+
+          <div class="formula-box">
+            <div class="formula-text">The Three Non-Negotiables</div>
+            <div class="formula-sub" style="text-align:left; max-width:400px; margin:var(--space-4) auto 0;">
+              1. Required fields completed so the record is usable<br>
+              2. Every outreach attempt logged so activity is visible<br>
+              3. Every next step scheduled so nothing sits "in limbo"
+            </div>
+          </div>
+        </section>
+
+        <section class="lesson-section">
+          <h2 class="lesson-section-title">A) Create or Update a Lead</h2>
+          <ol class="lesson-steps">
+            <li><div><strong>Search first.</strong> Before creating a new record, search by phone or email. Duplicate records are a data quality problem — always check for an existing lead first.</div></li>
+            <li><div><strong>If no record exists, create one.</strong> Fill all required fields immediately — don't create an empty skeleton and come back later.</div></li>
+            <li><div><strong>If a record exists, update it.</strong> Don't create a duplicate — update the existing one with your new information.</div></li>
+          </ol>
+
+          <h3 style="font-size:var(--text-base); font-weight:700; margin:var(--space-5) 0 var(--space-3);">Required Fields (Minimum)</h3>
+          <ul class="lesson-list">
+            <li><strong>Name</strong> — First and last, correctly spelled and cased</li>
+            <li><strong>Primary Phone</strong> — The number they answered or are likely to answer</li>
+            <li><strong>Email</strong> — If available; don't leave blank if you have it</li>
+            <li><strong>Lead Source</strong> — Where did this lead come from? (list, referral, web, inbound)</li>
+            <li><strong>Status / Stage</strong> — Accurately reflects where they are in the pipeline</li>
+            <li><strong>Assigned Owner</strong> — Who is responsible for this lead right now</li>
+          </ul>
+        </section>
+
+        <section class="lesson-section">
+          <h2 class="lesson-section-title">B) Log a Call Attempt</h2>
+          <ol class="lesson-steps">
+            <li><div>Add an activity of type <strong>Call</strong> to the lead record immediately after the attempt — not at end of day.</div></li>
+            <li><div>Set the <strong>outcome code</strong> accurately:
+              <div style="display:flex; flex-wrap:wrap; gap:var(--space-2); margin-top:var(--space-3);">
+                <code style="background:var(--color-surface-offset); padding:2px 8px; border-radius:4px; font-size:0.8em;">No Answer</code>
+                <code style="background:var(--color-surface-offset); padding:2px 8px; border-radius:4px; font-size:0.8em;">Callback Requested</code>
+                <code style="background:var(--color-surface-offset); padding:2px 8px; border-radius:4px; font-size:0.8em;">Qualified</code>
+                <code style="background:var(--color-surface-offset); padding:2px 8px; border-radius:4px; font-size:0.8em;">Not a Fit</code>
+                <code style="background:var(--color-surface-offset); padding:2px 8px; border-radius:4px; font-size:0.8em;">Do Not Contact</code>
+              </div>
+            </div></li>
+            <li><div>Write your <strong>notes</strong> using this minimum standard:<br>
+              <ul class="lesson-list" style="margin-top:var(--space-3);">
+                <li>What they want (goal)</li>
+                <li>Their timeline</li>
+                <li>Any objections raised</li>
+                <li>The agreed next step — what AND when</li>
+              </ul>
+            </div></li>
+          </ol>
+
+          <div class="callout">
+            <div class="callout-label">Note Quality</div>
+            <p>Avoid vague notes like "good call" or "seems interested." These tell the next person nothing. Your notes should let a teammate walk into the next call fully prepared without asking you anything.</p>
+          </div>
+        </section>
+
+        <section class="lesson-section">
+          <h2 class="lesson-section-title">C) Create a Follow-Up Task</h2>
+          <ol class="lesson-steps">
+            <li><div><strong>Task name:</strong> Action + context — e.g., "Call back — requested by lead" or "Send ARV analysis — promised on 4/15"</div></li>
+            <li><div><strong>Due date/time:</strong> Specific. Not "this week" — a real date and time slot.</div></li>
+            <li><div><strong>Reminder:</strong> Set per Ocean Luxe policy so it surfaces before it's due.</div></li>
+            <li><div><strong>Link to lead record:</strong> Always attach the task to the lead so anyone can find the context.</div></li>
+          </ol>
+        </section>
+
+        <section class="lesson-section">
+          <h2 class="lesson-section-title">Data Quality Standards</h2>
+          <ul class="lesson-list">
+            <li>Always include timeline and next step in notes when you have them</li>
+            <li>Use consistent casing and format for phone numbers and emails</li>
+            <li>Never use vague notes — be specific about what was said and agreed</li>
+            <li>Log even failed attempts (no answer, voicemail) — the timestamp matters</li>
+          </ul>
+        </section>
+
+        <!-- HANDS-ON CHECKLIST / ASSESSMENT -->
+        <section class="quiz-section">
+          <div class="quiz-header">
+            <h2 class="quiz-title">Hands-On Completion Checklist</h2>
+            <p class="quiz-subtitle">Complete all items in your CRM sandbox or training environment. Check each item to mark it done.</p>
+          </div>
+
+          <div class="quiz-question" style="padding:var(--space-6);">
+            <ul class="checklist" id="checklist">
+              <li class="checklist-item">
+                <input type="checkbox" id="chk1" />
+                <label for="chk1">I searched for the lead by phone/email first (and confirmed it existed or didn't)</label>
+              </li>
+              <li class="checklist-item">
+                <input type="checkbox" id="chk2" />
+                <label for="chk2">I created or updated the lead record with all required fields completed</label>
+              </li>
+              <li class="checklist-item">
+                <input type="checkbox" id="chk3" />
+                <label for="chk3">I logged a call attempt with the correct outcome code</label>
+              </li>
+              <li class="checklist-item">
+                <input type="checkbox" id="chk4" />
+                <label for="chk4">My notes include the lead's goal, timeline, and agreed next step</label>
+              </li>
+              <li class="checklist-item">
+                <input type="checkbox" id="chk5" />
+                <label for="chk5">I created a follow-up task with a specific date/time linked to the lead record</label>
+              </li>
+            </ul>
+          </div>
+
+          <div class="quiz-submit-row">
+            <button class="btn-submit" id="checklistSubmit">Mark Lesson Complete</button>
+          </div>
+
+          <div class="quiz-score-box" id="quizScoreBox">
+            <div class="quiz-score-num quiz-pass" id="quizScoreNum">Course Complete</div>
+            <div class="quiz-score-msg" id="quizScoreMsg">You've finished all 5 lessons of the Ocean Luxe Agent Onboarding eCourse. You're ready to represent Ocean Luxe.</div>
+            <div style="display:flex; gap:var(--space-4); flex-wrap:wrap; justify-content:center; margin-top:var(--space-6);">
+              <a href="index.html" class="btn-primary">View Course Home</a>
+              <a href="#" class="btn-gold" onclick="printCertificate()">Download Certificate</a>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+
+    <aside class="lesson-sidebar">
+      <div class="sidebar-card">
+        <div class="sidebar-title">Learning Objectives</div>
+        <ul class="sidebar-objectives">
+          <li>Create or update a lead record with all required fields</li>
+          <li>Log a call attempt with the correct outcome and notes</li>
+          <li>Set a follow-up task with a specific date/time and clear next action</li>
+        </ul>
+        <div class="sidebar-nav">
+          <a href="lesson-04.html" class="btn-nav">← Lesson 04</a>
+          <a href="index.html" class="btn-nav primary">Back to Course Home</a>
+        </div>
+      </div>
+
+      <div class="sidebar-card" style="top: auto;">
+        <div class="sidebar-title">HR Note</div>
+        <p style="font-size:var(--text-xs); color:var(--color-text-muted); line-height:1.6;">This lesson's field labels and outcome codes are placeholders. HR / Ops should confirm the exact CRM field names, status definitions, and follow-up SLA rules before certifying new hires.</p>
+      </div>
+    </aside>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    document.getElementById('checklistSubmit').addEventListener('click', () => {
+      const boxes = document.querySelectorAll('#checklist input[type="checkbox"]');
+      const allChecked = Array.from(boxes).every(b => b.checked);
+      if (!allChecked) {
+        alert('Please complete all checklist items before marking the lesson done.');
+        return;
+      }
+      document.getElementById('checklistSubmit').disabled = true;
+      const scoreBox = document.getElementById('quizScoreBox');
+      scoreBox.classList.add('visible');
+      scoreBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      markLessonComplete(5);
+      updateNavProgress();
+      updateLessonCards();
+    });
+  </script>
+</body>
+</html>

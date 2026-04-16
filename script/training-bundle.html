@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ocean Luxe — Agent Training</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@300..700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- NAV -->
+  <header class="nav">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-logo" aria-label="Ocean Luxe Training Home">
+        <svg width="32" height="32" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+          <path d="M20 4C11.163 4 4 11.163 4 20c0 6.19 3.39 11.6 8.4 14.5L20 36l7.6-1.5C32.61 31.6 36 26.19 36 20 36 11.163 28.837 4 20 4z" fill="#C9A84C" opacity="0.15"/>
+          <path d="M8 22c2-4 5-7 8-8 1.5 5 4 9 7 11 1-4 3-7 6-9 1 3 1.5 6 1 9-2.5 2-5 3-8 3-4 0-8-2-11-5l-3-1z" fill="#C9A84C" opacity="0.6"/>
+          <path d="M20 8c-6.627 0-12 5.373-12 12 0 3.55 1.54 6.74 4 8.97" stroke="#C9A84C" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M20 32c6.627 0 12-5.373 12-12 0-3.55-1.54-6.74-4-8.97" stroke="#C9A84C" stroke-width="1.5" stroke-linecap="round"/>
+          <circle cx="20" cy="20" r="3" fill="#C9A84C"/>
+        </svg>
+        <span class="nav-brand">Ocean Luxe <em>Training</em></span>
+      </a>
+      <div class="nav-right">
+        <div class="nav-progress-pill" id="navProgressPill">
+          <span id="navProgressText">0 / 5 complete</span>
+          <div class="nav-progress-track">
+            <div class="nav-progress-fill" id="navProgressFill" style="width:0%"></div>
+          </div>
+        </div>
+        <button class="theme-toggle" data-theme-toggle aria-label="Switch to light mode">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-inner">
+      <div class="hero-badge">New Hire Onboarding</div>
+      <h1 class="hero-title">Welcome to<br><em>Ocean Luxe</em></h1>
+      <p class="hero-sub">Five lessons. ~31 minutes. Everything you need to hit the ground running as a new agent — from your first call to closing out deals in the CRM.</p>
+      <div class="hero-meta">
+        <span>5 Lessons</span>
+        <span class="dot">·</span>
+        <span>~31 min</span>
+        <span class="dot">·</span>
+        <span>Knowledge Checks Included</span>
+      </div>
+      <div class="hero-actions">
+        <a href="lesson-01.html" class="btn-primary">Start Lesson 1 →</a>
+        <a href="lesson-01.html" class="btn-gold" id="continueBtn">Continue →</a>
+        <button class="btn-ghost" id="resetProgressBtn" type="button">Reset progress</button>
+      </div>
+    </div>
+    <div class="hero-wave">
+      <svg viewBox="0 0 1440 80" fill="none" preserveAspectRatio="none">
+        <path d="M0 40 C240 80 480 0 720 40 C960 80 1200 0 1440 40 L1440 80 L0 80 Z" fill="var(--color-bg)"/>
+      </svg>
+    </div>
+  </section>
+
+  <!-- COURSE GRID -->
+  <section class="course">
+    <div class="course-inner">
+      <h2 class="section-title">Course Outline</h2>
+      <p class="section-sub">Complete lessons in order — each builds on the last.</p>
+
+      <div class="lesson-grid" id="lessonGrid">
+
+        <a href="lesson-01.html" class="lesson-card" data-lesson="1">
+          <div class="lesson-card-top">
+            <span class="lesson-num">01</span>
+            <span class="lesson-duration">3 min</span>
+          </div>
+          <div class="lesson-status-icon" data-status-icon="1">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <h3 class="lesson-card-title">Welcome to Ocean Luxe</h3>
+          <p class="lesson-card-desc">Understand the lead workflow (Capture → Contact → Qualify), professional standards, and compliance basics.</p>
+          <div class="lesson-card-tags">
+            <span class="tag">Onboarding</span>
+            <span class="tag">Workflow</span>
+          </div>
+          <div class="lesson-card-footer">
+            <span class="lesson-start-text">Start lesson →</span>
+          </div>
+        </a>
+
+        <a href="lesson-02.html" class="lesson-card" data-lesson="2">
+          <div class="lesson-card-top">
+            <span class="lesson-num">02</span>
+            <span class="lesson-duration">8 min</span>
+          </div>
+          <div class="lesson-status-icon" data-status-icon="2">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <h3 class="lesson-card-title">Cold Calling Mastery</h3>
+          <p class="lesson-card-desc">Master the 4-step call flow, opener scripts, qualifying questions, and outcome logging standards.</p>
+          <div class="lesson-card-tags">
+            <span class="tag">Cold Calling</span>
+            <span class="tag">Outreach</span>
+          </div>
+          <div class="lesson-card-footer">
+            <span class="lesson-start-text">Start lesson →</span>
+          </div>
+        </a>
+
+        <a href="lesson-03.html" class="lesson-card" data-lesson="3">
+          <div class="lesson-card-top">
+            <span class="lesson-num">03</span>
+            <span class="lesson-duration">6 min</span>
+          </div>
+          <div class="lesson-status-icon" data-status-icon="3">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <h3 class="lesson-card-title">Handling Objections</h3>
+          <p class="lesson-card-desc">Use the ACR framework — Acknowledge, Clarify, Respond — to handle any objection and protect rapport.</p>
+          <div class="lesson-card-tags">
+            <span class="tag">Objections</span>
+            <span class="tag">Rapport</span>
+          </div>
+          <div class="lesson-card-footer">
+            <span class="lesson-start-text">Start lesson →</span>
+          </div>
+        </a>
+
+        <a href="lesson-04.html" class="lesson-card" data-lesson="4">
+          <div class="lesson-card-top">
+            <span class="lesson-num">04</span>
+            <span class="lesson-duration">7 min</span>
+          </div>
+          <div class="lesson-status-icon" data-status-icon="4">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <h3 class="lesson-card-title">Deal Analysis &amp; ARV</h3>
+          <p class="lesson-card-desc">Calculate After Repair Value, apply the 70% rule to find Max Allowable Offer, and flag escalation risks.</p>
+          <div class="lesson-card-tags">
+            <span class="tag">Analysis</span>
+            <span class="tag">ARV</span>
+          </div>
+          <div class="lesson-card-footer">
+            <span class="lesson-start-text">Start lesson →</span>
+          </div>
+        </a>
+
+        <a href="lesson-05.html" class="lesson-card" data-lesson="5">
+          <div class="lesson-card-top">
+            <span class="lesson-num">05</span>
+            <span class="lesson-duration">TBD</span>
+          </div>
+          <div class="lesson-status-icon" data-status-icon="5">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <h3 class="lesson-card-title">CRM Walkthrough</h3>
+          <p class="lesson-card-desc">Create and update lead records, log every call attempt, and schedule follow-up tasks correctly.</p>
+          <div class="lesson-card-tags">
+            <span class="tag">CRM</span>
+            <span class="tag">Process</span>
+          </div>
+          <div class="lesson-card-footer">
+            <span class="lesson-start-text">Start lesson →</span>
+          </div>
+        </a>
+
+      </div>
+
+      <!-- COMPLETION BANNER -->
+      <div class="completion-banner" id="completionBanner" style="display:none">
+        <div class="completion-inner">
+          <div class="completion-icon">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          </div>
+          <div>
+            <h3 class="completion-title">Course Complete</h3>
+            <p class="completion-sub">You've completed all 5 lessons. You're ready to represent Ocean Luxe.</p>
+          </div>
+          <a href="#" class="btn-gold" onclick="printCertificate()">Download Certificate</a>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- COMPLETION CRITERIA -->
+  <section class="criteria">
+    <div class="criteria-inner">
+      <h2 class="section-title">Completion Criteria</h2>
+      <div class="criteria-grid">
+        <div class="criteria-card">
+          <div class="criteria-num">1</div>
+          <p>Complete all 5 lessons in sequence</p>
+        </div>
+        <div class="criteria-card">
+          <div class="criteria-num">2</div>
+          <p>Pass each knowledge check at the required threshold</p>
+        </div>
+        <div class="criteria-card">
+          <div class="criteria-num">3</div>
+          <p>Submit one practical artifact — a 30-sec opener or ARV analysis</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      <span>© 2026 Ocean Luxe Estate LLC · Internal Training</span>
+      <span>RE-OL-01 through RE-OL-05 · v0.1</span>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -39,6 +39,32 @@ async function buildAll() {
   console.log("building client...");
   await viteBuild();
 
+  const trainingFiles = [
+    "training-bundle.html",
+    "index.html",
+    "lesson-01.html",
+    "lesson-02.html",
+    "lesson-03.html",
+    "lesson-04.html",
+    "lesson-05.html",
+    "app.js",
+    "style.css",
+    "config.js",
+    "imsmanifest.xml",
+    "scorm_api_wrapper.js",
+  ];
+  const trainingSrcDir = path.resolve("script");
+  const trainingDestDir = path.resolve("dist", "public", "training");
+  await fs.promises.mkdir(trainingDestDir, { recursive: true });
+  await Promise.all(
+    trainingFiles.map(async (file) => {
+      const from = path.join(trainingSrcDir, file);
+      const to = path.join(trainingDestDir, file);
+      if (!fs.existsSync(from)) return;
+      await fs.promises.copyFile(from, to);
+    }),
+  );
+
   const pkg = JSON.parse(await readFile("package.json", "utf-8"));
   const allDeps = [
     ...Object.keys(pkg.dependencies || {}),
