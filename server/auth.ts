@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import { pool } from "./db.js";
 
 const DEFAULT_COOKIE_NAMES = [
+  "connect.sid",
   "__Secure-better-auth.session_token",
   "better-auth.session_token",
   "__Secure-authjs.session-token",

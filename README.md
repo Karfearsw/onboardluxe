@@ -44,6 +44,16 @@ NODE_ENV=production node dist/index.cjs
 4. Output directory: `dist/public`
 5. Deploy
 
+## Data & Storage
+
+- DB: stored in Postgres (Neon) configured by `DATABASE_URL` in Vercel project env vars.
+- Tables: `hr_agents`, `hr_onboarding_tasks`, `hr_documents`, `hr_ica_signatures`, `hr_training_progress`
+- Documents: current UI flow stores document metadata + `fileUrl` in `hr_documents` (it does not upload binary files by itself).
+
+## Discord Notifications (Optional)
+
+- Set `DISCORD_WEBHOOK_URL` to enable event notifications (agent created, docs added, ICA signed, payout/training updates).
+
 ## Brand
 
 - Colors: Black `#0a0a0a` · Gold `hsl(43,85%,52%)` · White

@@ -2,11 +2,13 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { requireSharedAdmin, requireSharedAuth } from "./auth.js";
 import { pool } from "./db.js";
+import { sendDiscordWebhook } from "./discord.js";
 import { storage } from "./storage.js";
 import { insertAgentSchema, insertIcaSignatureSchema } from "../shared/schema.js";
 import { z } from "zod";
 
 const DEFAULT_COOKIE_NAMES = [
+  "connect.sid",
   "__Secure-better-auth.session_token",
   "better-auth.session_token",
   "__Secure-authjs.session-token",
@@ -134,6 +136,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // Mark first step in progress
       await storage.updateTaskStatus(agent.id, "profile", "in_progress");
       await storage.initTrainingModules(agent.id);
+      void sendDiscordWebhook("agent.created", { agent });
       res.status(201).json(agent);
     } catch (e: any) {
       if (e instanceof z.ZodError) {
@@ -255,6 +258,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const sig = await storage.createIcaSignature(data);
       // Mark ICA task complete
       await storage.updateTaskStatus(Number(req.params.id), "ica", "complete");
+      void sendDiscordWebhook("agent.ica_signed", { agentId: Number(req.params.id), signature: sig });
       res.status(201).json(sig);
     } catch (e: any) {
       res.status(400).json({ message: e.message });
@@ -283,6 +287,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (taskKeyMap[docType]) {
         await storage.updateTaskStatus(Number(req.params.id), taskKeyMap[docType], "complete");
       }
+      void sendDiscordWebhook("agent.document_added", { agentId: Number(req.params.id), document: doc });
       res.status(201).json(doc);
     } catch (e: any) {
       res.status(400).json({ message: e.message });
@@ -299,6 +304,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
     if (!agent) return res.status(404).json({ message: "Agent not found" });
     await storage.updateTaskStatus(Number(req.params.id), "payout", "complete");
+    void sendDiscordWebhook("agent.payout_submitted", { agent });
     res.json(agent);
   });
 
@@ -315,6 +321,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (all.length > 0 && all.every((m) => m.completed)) {
       await storage.updateTaskStatus(Number(req.params.id), "training", "complete");
     }
+    void sendDiscordWebhook("agent.training_completed", { agentId: Number(req.params.id), moduleKey: req.params.moduleKey, progress });
     res.json(progress);
   });
 
