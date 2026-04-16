@@ -54,6 +54,13 @@ NODE_ENV=production node dist/index.cjs
 
 - Set `DISCORD_WEBHOOK_URL` to enable event notifications (agent created, docs added, ICA signed, payout/training updates).
 
+## Debug Endpoints (Optional)
+
+- Set `DEBUG_ENDPOINTS=1` to temporarily enable:
+  - `POST /api/debug/discord`
+  - `GET /api/health`
+  - `GET /api/debug/auth`
+
 ## Brand
 
 - Colors: Black `#0a0a0a` · Gold `hsl(43,85%,52%)` · White

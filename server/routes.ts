@@ -64,10 +64,29 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
     });
 
+    app.post("/api/debug/discord", async (req, res) => {
+      if (!process.env.DISCORD_WEBHOOK_URL?.trim()) {
+        return res.status(400).json({ ok: false, message: "DISCORD_WEBHOOK_URL not set" });
+      }
+
+      try {
+        await sendDiscordWebhook("debug.discord_test", {
+          timestamp: new Date().toISOString(),
+          ip: req.ip,
+          body: req.body ?? null,
+        });
+        return res.json({ ok: true });
+      } catch (e) {
+        const error = e instanceof Error ? e : new Error(String(e));
+        return res.status(500).json({ ok: false, message: error.message });
+      }
+    });
+
     app.get("/api/debug/auth", async (req, res) => {
       const cookies = parseCookies(req.headers.cookie);
       const cookieNames = getConfiguredCookieNames();
       const matchedCookieName = cookieNames.find((name) => cookies.has(name)) ?? null;
+
 
       let dbOk = true;
       try {
