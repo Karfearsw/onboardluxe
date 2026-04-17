@@ -79,6 +79,7 @@ NODE_ENV=production node dist/index.cjs
   - `POST /api/debug/discord`
   - `GET /api/health`
   - `GET /api/debug/auth`
+- `GET /api/admin/auth/diagnostics` is always available and returns safe auth/cookie hints (no secrets). Use it when `/api/debug/auth` is disabled in production.
 
 ## Admin SSO (Deals → HR)
 

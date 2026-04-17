@@ -409,7 +409,7 @@ export default function AdminPage() {
                 setAuthDiagError("");
                 setAuthDiag(null);
                 try {
-                  const res = await fetch("/api/debug/auth", { credentials: "include" });
+                  const res = await fetch("/api/admin/auth/diagnostics", { credentials: "include" });
                   if (!res.ok) {
                     const text = await res.text();
                     setAuthDiagError(text || `Diagnostics failed: ${res.status}`);
@@ -424,6 +424,28 @@ export default function AdminPage() {
             >
               Check Auth Diagnostics
             </button>
+            {authDiag?.debugEndpointsEnabled ? (
+              <button
+                type="button"
+                onClick={async () => {
+                  setAuthDiagError("");
+                  try {
+                    const res = await fetch("/api/debug/auth", { credentials: "include" });
+                    if (!res.ok) {
+                      const text = await res.text();
+                      setAuthDiagError(text || `Diagnostics failed: ${res.status}`);
+                      return;
+                    }
+                    setAuthDiag(await res.json());
+                  } catch (e: any) {
+                    setAuthDiagError(e?.message || "Diagnostics failed");
+                  }
+                }}
+                className="inline-flex items-center justify-center rounded-md border border-border px-4 py-2 text-sm font-semibold text-muted-foreground hover:text-foreground"
+              >
+                Deep Diagnostics
+              </button>
+            ) : null}
           </div>
           {hasAdminAccessError && (
             <p className="text-xs text-destructive">Admin session could not be loaded. Make sure the shared auth cookie is available on this domain.</p>

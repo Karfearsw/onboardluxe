@@ -150,6 +150,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   }
 
+  app.get("/api/admin/auth/diagnostics", async (req, res) => {
+    let dbOk = true;
+    try {
+      await pool.query("select 1 as ok");
+    } catch {
+      dbOk = false;
+    }
+
+    const diagnostics = await getSharedAuthDiagnostics(req);
+    res.json({
+      dbOk,
+      debugEndpointsEnabled,
+      message: debugEndpointsEnabled ? "" : "Enable DEBUG_ENDPOINTS=1 to access deeper diagnostics at /api/debug/auth",
+      diagnostics,
+    });
+  });
+
   app.post("/api/agent/login", async (req, res) => {
     const schema = z.object({ email: z.string().email(), phoneLast4: z.string().trim().regex(/^\d{4}$/) });
     const parsed = schema.safeParse(req.body);
