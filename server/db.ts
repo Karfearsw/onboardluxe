@@ -124,12 +124,26 @@ async function initializeDatabase() {
       created_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS hr_status_events (
+      id SERIAL PRIMARY KEY,
+      agent_id INTEGER NOT NULL,
+      event_type TEXT NOT NULL,
+      actor_type TEXT NOT NULL,
+      actor_id TEXT NOT NULL DEFAULT '',
+      old_value TEXT DEFAULT '',
+      new_value TEXT DEFAULT '',
+      metadata_json TEXT DEFAULT '',
+      created_at TEXT NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS hr_agents_email_idx ON hr_agents (email);
     CREATE INDEX IF NOT EXISTS hr_onboarding_tasks_agent_idx ON hr_onboarding_tasks (agent_id);
     CREATE INDEX IF NOT EXISTS hr_documents_agent_idx ON hr_documents (agent_id);
     CREATE INDEX IF NOT EXISTS hr_training_progress_agent_idx ON hr_training_progress (agent_id);
     CREATE INDEX IF NOT EXISTS hr_agent_sessions_agent_idx ON hr_agent_sessions (agent_id);
     CREATE INDEX IF NOT EXISTS hr_agent_sessions_expires_idx ON hr_agent_sessions (expires_at);
+    CREATE INDEX IF NOT EXISTS hr_status_events_agent_idx ON hr_status_events (agent_id);
+    CREATE INDEX IF NOT EXISTS hr_status_events_created_idx ON hr_status_events (created_at);
 
     CREATE OR REPLACE VIEW hr_agent_summary AS
     SELECT

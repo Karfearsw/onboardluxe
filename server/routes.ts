@@ -4,8 +4,10 @@ import { getSharedAuthDiagnostics, requireSharedAdmin, requireSharedAuth } from 
 import { clearAgentSessionCookie, createAgentSession, deleteAgentSession, requireAgentAuth, requireAgentOrAdmin, setAgentSessionCookie } from "./agent-auth.js";
 import { pool } from "./db.js";
 import { sendDiscordWebhook } from "./discord.js";
+import { listStatusEvents, logStatusEvent } from "./status-events.js";
 import { storage } from "./storage.js";
 import { insertAgentSchema, insertIcaSignatureSchema } from "../shared/schema.js";
+import { PIPELINE_STAGES, normalizePipelineStage } from "../shared/status.js";
 import { z } from "zod";
 
 const debugEndpointsEnabled = process.env.DEBUG_ENDPOINTS === "1" || process.env.NODE_ENV !== "production";
@@ -23,6 +25,8 @@ const payoutSchema = z.object({
   sofiReferralStatus: z.enum(["Not Invited", "Invited", "Opened", "Bonus Confirmed", "Declined"]).optional(),
   sofiReferralLink: z.string().trim().optional(),
 });
+const pipelineStageSchema = z.enum(PIPELINE_STAGES);
+const pipelineStageUpdateSchema = z.object({ stage: pipelineStageSchema });
 
 function validatePayoutDetails(payoutMethodType: string, payoutDetails: string) {
   const value = payoutDetails.trim();
@@ -59,6 +63,51 @@ function validatePayoutDetails(payoutMethodType: string, payoutDetails: string) 
 }
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
+  async function buildStatusSummary(agentId: number) {
+    const agent = await storage.getAgent(agentId);
+    if (!agent) return null;
+
+    const [tasks, docs, training, events] = await Promise.all([
+      storage.getOnboardingTasks(agentId),
+      storage.getDocuments(agentId),
+      storage.getTrainingProgress(agentId),
+      listStatusEvents(agentId, 12),
+    ]);
+
+    const completedTasks = tasks.filter((t) => t.status === "complete").length;
+    const progressPercent = tasks.length ? Math.round((completedTasks / tasks.length) * 100) : 0;
+    const currentTask = tasks.find((t) => t.status === "in_progress") || tasks.find((t) => t.status === "pending") || null;
+    const pendingDocs = docs.filter((d) => d.status === "Pending Review").length;
+    const completedTrainingModules = training.filter((t) => t.completed).length;
+    const trainingTotal = training.length;
+    const payoutTask = tasks.find((t) => t.taskKey === "payout");
+    const payoutSubmitted = payoutTask?.status === "complete";
+
+    return {
+      agentId: agent.id,
+      pipelineStage: normalizePipelineStage(agent.crmPipelineStage),
+      subscriptionStatus: agent.subscriptionStatus,
+      onboarding: {
+        step: agent.onboardingStep,
+        complete: agent.onboardingComplete,
+        progressPercent,
+        currentTask,
+      },
+      documents: {
+        pendingReview: pendingDocs,
+      },
+      training: {
+        completed: completedTrainingModules,
+        total: trainingTotal,
+      },
+      payout: {
+        submitted: payoutSubmitted,
+        payoutMethodType: agent.payoutMethodType,
+      },
+      events,
+    };
+  }
+
   if (debugEndpointsEnabled) {
     app.get("/api/health", async (_req, res) => {
       try {
@@ -142,6 +191,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ agent, tasks });
   });
 
+  app.get("/api/agent/status", requireAgentAuth, async (req, res) => {
+    const agentId = req.agentUser!.agentId;
+    const summary = await buildStatusSummary(agentId);
+    if (!summary) return res.status(404).json({ message: "Agent not found" });
+    res.json(summary);
+  });
+
   // ── Agents ────────────────────────────────────────────────────────────────
   app.get("/api/agents", requireSharedAdmin, async (_req, res) => {
     const all = await storage.getAllAgents();
@@ -182,6 +238,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       await storage.initTrainingModules(agent.id);
       const session = await createAgentSession(agent.id);
       setAgentSessionCookie(res, session.token);
+      await logStatusEvent({
+        agentId: agent.id,
+        eventType: "agent.created",
+        actorType: "system",
+        metadata: { email: agent.email, name: agent.name },
+      });
       void sendDiscordWebhook("agent.created", { agent }).catch((error) => {
         console.error("Discord webhook failed (agent.created):", error);
       });
@@ -211,8 +273,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.status(400).json({ message: e.message });
     }
 
-    const agent = await storage.updateAgent(Number(req.params.id), payload);
+    const agentId = Number(req.params.id);
+    const previous = await storage.getAgent(agentId);
+    const agent = await storage.updateAgent(agentId, payload);
     if (!agent) return res.status(404).json({ message: "Agent not found" });
+    if (previous && typeof payload.subscriptionStatus === "string" && payload.subscriptionStatus !== previous.subscriptionStatus) {
+      await logStatusEvent({
+        agentId: agent.id,
+        eventType: "subscription.status_changed",
+        actorType: "admin",
+        actorId: String(req.authUser?.id ?? ""),
+        oldValue: previous.subscriptionStatus,
+        newValue: payload.subscriptionStatus,
+      });
+    }
     res.json(agent);
   });
 
@@ -251,11 +325,61 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
+  app.get("/api/admin/agents/:id/status", requireSharedAdmin, async (req, res) => {
+    const agentId = Number(req.params.id);
+    const summary = await buildStatusSummary(agentId);
+    if (!summary) return res.status(404).json({ message: "Agent not found" });
+    res.json(summary);
+  });
+
+  app.patch("/api/admin/agents/:id/pipeline-stage", requireSharedAdmin, async (req, res) => {
+    const parsed = pipelineStageUpdateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid stage payload", issues: parsed.error.issues });
+    }
+
+    const agentId = Number(req.params.id);
+    const agent = await storage.getAgent(agentId);
+    if (!agent) return res.status(404).json({ message: "Agent not found" });
+
+    const previousStage = normalizePipelineStage(agent.crmPipelineStage);
+    const nextStage = parsed.data.stage;
+    if (previousStage === nextStage) return res.json({ ok: true, stage: nextStage });
+
+    const updated = await storage.updateAgent(agentId, { crmPipelineStage: nextStage });
+    if (!updated) return res.status(404).json({ message: "Agent not found" });
+
+    await logStatusEvent({
+      agentId,
+      eventType: "pipeline.stage_changed",
+      actorType: "admin",
+      actorId: String(req.authUser?.id ?? ""),
+      oldValue: previousStage,
+      newValue: nextStage,
+    });
+
+    void sendDiscordWebhook("agent.pipeline_stage_changed", { agentId, previousStage, nextStage }).catch((error) => {
+      console.error("Discord webhook failed (agent.pipeline_stage_changed):", error);
+    });
+
+    res.json({ ok: true, stage: nextStage });
+  });
+
   app.patch("/api/admin/documents/:id", requireSharedAdmin, async (req, res) => {
     try {
+      const existing = await storage.getDocument(Number(req.params.id));
       const { status } = documentStatusSchema.parse(req.body);
       const document = await storage.updateDocumentStatus(Number(req.params.id), status);
       if (!document) return res.status(404).json({ message: "Document not found" });
+      await logStatusEvent({
+        agentId: document.agentId,
+        eventType: "document.status_changed",
+        actorType: "admin",
+        actorId: String(req.authUser?.id ?? ""),
+        oldValue: existing?.status || "",
+        newValue: status,
+        metadata: { docType: document.docType, documentId: document.id },
+      });
       res.json(document);
     } catch (e: any) {
       res.status(400).json({ message: e.message });
@@ -279,12 +403,28 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const nextPending = tasks.find((t) => t.status === "pending");
       const allComplete = tasks.every((t) => t.status === "complete");
 
+      await logStatusEvent({
+        agentId: Number(String(req.params.id)),
+        eventType: "onboarding.task_completed",
+        actorType: req.authUser ? "admin" : "agent",
+        actorId: String(req.authUser?.id ?? ""),
+        metadata: { taskKey: String(req.params.taskKey) },
+      });
+
       if (nextPending) {
         await storage.updateTaskStatus(Number(String(req.params.id)), nextPending.taskKey, "in_progress");
         await storage.updateAgent(Number(String(req.params.id)), { onboardingStep: nextPending.stepNumber });
       }
       if (allComplete) {
         await storage.updateAgent(Number(String(req.params.id)), { onboardingComplete: true, onboardingStep: 6 });
+        await logStatusEvent({
+          agentId: Number(String(req.params.id)),
+          eventType: "onboarding.completed",
+          actorType: "system",
+        });
+        void sendDiscordWebhook("onboarding.completed", { agentId: Number(String(req.params.id)) }).catch((error) => {
+          console.error("Discord webhook failed (onboarding.completed):", error);
+        });
       }
     }
     res.json(task);
@@ -306,6 +446,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const sig = await storage.createIcaSignature(data);
       // Mark ICA task complete
       await storage.updateTaskStatus(Number(String(req.params.id)), "ica", "complete");
+      await logStatusEvent({
+        agentId: Number(String(req.params.id)),
+        eventType: "ica.signed",
+        actorType: req.authUser ? "admin" : "agent",
+        actorId: String(req.authUser?.id ?? ""),
+      });
       void sendDiscordWebhook("agent.ica_signed", { agentId: Number(String(req.params.id)), signature: sig }).catch((error) => {
         console.error("Discord webhook failed (agent.ica_signed):", error);
       });
@@ -337,6 +483,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (taskKeyMap[docType]) {
         await storage.updateTaskStatus(Number(String(req.params.id)), taskKeyMap[docType], "complete");
       }
+      await logStatusEvent({
+        agentId: Number(String(req.params.id)),
+        eventType: "document.uploaded",
+        actorType: req.authUser ? "admin" : "agent",
+        actorId: String(req.authUser?.id ?? ""),
+        metadata: { docType: String(docType), documentId: doc.id },
+      });
       void sendDiscordWebhook("agent.document_added", { agentId: Number(String(req.params.id)), document: doc }).catch((error) => {
         console.error("Discord webhook failed (agent.document_added):", error);
       });
@@ -378,6 +531,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
     if (!agent) return res.status(404).json({ message: "Agent not found" });
     await storage.updateTaskStatus(Number(String(req.params.id)), "payout", "complete");
+    await logStatusEvent({
+      agentId: Number(String(req.params.id)),
+      eventType: "payout.submitted",
+      actorType: req.authUser ? "admin" : "agent",
+      actorId: String(req.authUser?.id ?? ""),
+      metadata: { payoutMethodType },
+    });
     void sendDiscordWebhook("agent.payout_submitted", { agent }).catch((error) => {
       console.error("Discord webhook failed (agent.payout_submitted):", error);
     });
@@ -391,6 +551,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       sofiReferralLink: envLink,
     });
     if (!agent) return res.status(404).json({ message: "Agent not found" });
+    await logStatusEvent({
+      agentId: Number(String(req.params.id)),
+      eventType: "sofi.referral_opened",
+      actorType: req.authUser ? "admin" : "agent",
+      actorId: String(req.authUser?.id ?? ""),
+    });
     res.json(agent);
   });
 
@@ -406,6 +572,30 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const all = await storage.getTrainingProgress(Number(String(req.params.id)));
     if (all.length > 0 && all.every((m) => m.completed)) {
       await storage.updateTaskStatus(Number(String(req.params.id)), "training", "complete");
+    }
+    await logStatusEvent({
+      agentId: Number(String(req.params.id)),
+      eventType: "training.module_completed",
+      actorType: req.authUser ? "admin" : "agent",
+      actorId: String(req.authUser?.id ?? ""),
+      metadata: { moduleKey: String(req.params.moduleKey) },
+    });
+
+    const tasks = await storage.getOnboardingTasks(Number(String(req.params.id)));
+    const allComplete = tasks.every((t) => t.status === "complete");
+    if (allComplete) {
+      const agent = await storage.getAgent(Number(String(req.params.id)));
+      if (agent && !agent.onboardingComplete) {
+        await storage.updateAgent(Number(String(req.params.id)), { onboardingComplete: true, onboardingStep: 6 });
+        await logStatusEvent({
+          agentId: Number(String(req.params.id)),
+          eventType: "onboarding.completed",
+          actorType: "system",
+        });
+        void sendDiscordWebhook("onboarding.completed", { agentId: Number(String(req.params.id)) }).catch((error) => {
+          console.error("Discord webhook failed (onboarding.completed):", error);
+        });
+      }
     }
     void sendDiscordWebhook("agent.training_completed", { agentId: Number(String(req.params.id)), moduleKey: String(req.params.moduleKey), progress }).catch((error) => {
       console.error("Discord webhook failed (agent.training_completed):", error);

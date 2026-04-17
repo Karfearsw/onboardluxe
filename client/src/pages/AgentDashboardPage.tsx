@@ -9,6 +9,42 @@ import { Label } from "@/components/ui/label";
 import luxeLogo from "@assets/luxe-logo.jpg";
 import { ArrowLeft, CheckCircle2, Circle, Clock, LogOut } from "lucide-react";
 
+type StatusEvent = {
+  id: number;
+  agentId: number;
+  eventType: string;
+  actorType: string;
+  actorId: string;
+  oldValue: string;
+  newValue: string;
+  metadataJson: string;
+  createdAt: string;
+};
+
+type AgentStatusSummary = {
+  agentId: number;
+  pipelineStage: string;
+  subscriptionStatus: string;
+  onboarding: {
+    step: number;
+    complete: boolean;
+    progressPercent: number;
+    currentTask: OnboardingTask | null;
+  };
+  documents: {
+    pendingReview: number;
+  };
+  training: {
+    completed: number;
+    total: number;
+  };
+  payout: {
+    submitted: boolean;
+    payoutMethodType: string | null;
+  };
+  events: StatusEvent[];
+};
+
 const STEPS = [
   { key: "profile", label: "Profile", n: 1 },
   { key: "ica", label: "Sign ICA", n: 2 },
@@ -22,6 +58,30 @@ function StepStatusIcon({ status }: { status: string }) {
   if (status === "complete") return <CheckCircle2 className="h-4 w-4 text-emerald-500" />;
   if (status === "in_progress") return <Clock className="h-4 w-4 text-amber-500" />;
   return <Circle className="h-4 w-4 text-muted-foreground/40" />;
+}
+
+function formatEventLabel(evt: StatusEvent) {
+  const t = evt.eventType;
+  if (t === "agent.created") return "Application submitted";
+  if (t === "pipeline.stage_changed") return `Stage updated: ${evt.oldValue} → ${evt.newValue}`;
+  if (t === "subscription.status_changed") return `Subscription: ${evt.oldValue} → ${evt.newValue}`;
+  if (t === "onboarding.task_completed") return "Onboarding step completed";
+  if (t === "onboarding.completed") return "Onboarding completed";
+  if (t === "document.uploaded") return "Document uploaded";
+  if (t === "document.status_changed") return `Document review: ${evt.newValue}`;
+  if (t === "ica.signed") return "ICA signed";
+  if (t === "payout.submitted") return "Payout method submitted";
+  if (t === "training.module_completed") return "Training module completed";
+  if (t === "sofi.referral_opened") return "SoFi referral link opened";
+  return t;
+}
+
+function formatEventTime(value: string) {
+  try {
+    return new Date(value).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  } catch {
+    return value;
+  }
 }
 
 export default function AgentDashboardPage() {
@@ -50,6 +110,19 @@ export default function AgentDashboardPage() {
   const tasks = data?.tasks ?? [];
   const unauthorized = isError && (error as any)?.status === 401;
 
+  const { data: statusSummary } = useQuery<AgentStatusSummary>({
+    queryKey: ["/api/agent/status"],
+    queryFn: async () => {
+      const res = await fetch("/api/agent/status", { credentials: "include" });
+      if (!res.ok) {
+        throw new Error(`Failed to load status: ${res.status}`);
+      }
+      return res.json();
+    },
+    enabled: !!agent,
+    retry: false,
+  });
+
   const progress = useMemo(() => {
     const completed = tasks.filter((t) => t.status === "complete").length;
     const percent = tasks.length ? Math.round((completed / tasks.length) * 100) : 0;
@@ -67,6 +140,7 @@ export default function AgentDashboardPage() {
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["/api/agent/me"] });
+      await qc.invalidateQueries({ queryKey: ["/api/agent/status"] });
     },
   });
 
@@ -76,6 +150,7 @@ export default function AgentDashboardPage() {
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["/api/agent/me"] });
+      await qc.invalidateQueries({ queryKey: ["/api/agent/status"] });
     },
   });
 
@@ -155,6 +230,8 @@ export default function AgentDashboardPage() {
   }
 
   const resumeHref = `/onboarding/${agent.id}`;
+  const pipelineStage = statusSummary?.pipelineStage || "Applicant";
+  const recentEvents = statusSummary?.events || [];
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -188,6 +265,19 @@ export default function AgentDashboardPage() {
 
         <div className="grid gap-4 lg:grid-cols-[1.2fr,0.8fr]">
           <div className="bg-card border border-border rounded-xl p-5">
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <p className="text-xs uppercase tracking-widest text-muted-foreground">Application Status</p>
+                <p className="text-2xl font-semibold" style={{ fontFamily: "'Cormorant Garamond', serif" }}>{pipelineStage}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs uppercase tracking-widest text-muted-foreground">Docs</p>
+                <p className="text-sm font-semibold">
+                  {statusSummary ? (statusSummary.documents.pendingReview > 0 ? `${statusSummary.documents.pendingReview} pending` : "No pending") : "—"}
+                </p>
+              </div>
+            </div>
+
             <div className="flex items-center justify-between mb-4">
               <div>
                 <p className="text-xs uppercase tracking-widest text-muted-foreground">Onboarding Progress</p>
@@ -235,10 +325,24 @@ export default function AgentDashboardPage() {
                 {progress.current ? "Resume onboarding to continue where you left off." : "Your onboarding steps will appear here."}
               </p>
             </div>
+
+            <div className="bg-card border border-border rounded-xl p-5">
+              <p className="text-xs uppercase tracking-widest text-muted-foreground mb-3">Recent Updates</p>
+              <div className="space-y-2">
+                {recentEvents.slice(0, 8).map((evt) => (
+                  <div key={evt.id} className="rounded-lg bg-muted/40 px-3 py-2">
+                    <p className="text-sm font-medium">{formatEventLabel(evt)}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{formatEventTime(evt.createdAt)}</p>
+                  </div>
+                ))}
+                {recentEvents.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No updates yet.</p>
+                ) : null}
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
   );
 }
-

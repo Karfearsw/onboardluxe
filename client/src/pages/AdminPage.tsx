@@ -21,6 +21,7 @@ import {
   Users,
 } from "lucide-react";
 import type { Agent, Document, IcaSignature, OnboardingTask, TrainingProgress } from "@shared/schema";
+import { PIPELINE_STAGES } from "@shared/status";
 import luxeLogo from "@assets/luxe-logo.jpg";
 
 const OceanLuxeLogo = () => (
@@ -72,6 +73,66 @@ interface SharedAdminUser {
   organizationName: string | null;
   organizationSlug: string | null;
   organizationRole: string | null;
+}
+
+interface StatusEvent {
+  id: number;
+  agentId: number;
+  eventType: string;
+  actorType: string;
+  actorId: string;
+  oldValue: string;
+  newValue: string;
+  metadataJson: string;
+  createdAt: string;
+}
+
+interface AgentStatusSummary {
+  agentId: number;
+  pipelineStage: string;
+  subscriptionStatus: string;
+  onboarding: {
+    step: number;
+    complete: boolean;
+    progressPercent: number;
+    currentTask: OnboardingTask | null;
+  };
+  documents: {
+    pendingReview: number;
+  };
+  training: {
+    completed: number;
+    total: number;
+  };
+  payout: {
+    submitted: boolean;
+    payoutMethodType: string | null;
+  };
+  events: StatusEvent[];
+}
+
+function formatEventTime(value: string) {
+  try {
+    return new Date(value).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  } catch {
+    return value;
+  }
+}
+
+function formatEventLabel(evt: StatusEvent) {
+  const t = evt.eventType;
+  if (t === "agent.created") return "Application submitted";
+  if (t === "pipeline.stage_changed") return `Stage updated: ${evt.oldValue} → ${evt.newValue}`;
+  if (t === "subscription.status_changed") return `Subscription: ${evt.oldValue} → ${evt.newValue}`;
+  if (t === "onboarding.task_completed") return "Onboarding step completed";
+  if (t === "onboarding.completed") return "Onboarding completed";
+  if (t === "document.uploaded") return "Document uploaded";
+  if (t === "document.status_changed") return `Document review: ${evt.newValue}`;
+  if (t === "ica.signed") return "ICA signed";
+  if (t === "payout.submitted") return "Payout method submitted";
+  if (t === "training.module_completed") return "Training module completed";
+  if (t === "sofi.referral_opened") return "SoFi referral link opened";
+  return t;
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -186,6 +247,12 @@ export default function AdminPage() {
     enabled: !!currentAdmin && !!selectedAgentId,
   });
 
+  const { data: selectedAgentStatus } = useQuery<AgentStatusSummary>({
+    queryKey: ["/api/admin/agents", selectedAgentId, "status"],
+    queryFn: async () => (await apiRequest("GET", `/api/admin/agents/${selectedAgentId}/status`)).json(),
+    enabled: !!currentAdmin && !!selectedAgentId,
+  });
+
   const { mutate: activateAgent } = useMutation({
     mutationFn: async (agentId: number) => apiRequest("PATCH", `/api/agents/${agentId}`, { subscriptionStatus: "Active" }),
     onSuccess: () => {
@@ -193,6 +260,7 @@ export default function AdminPage() {
       qc.invalidateQueries({ queryKey: ["/api/stats"] });
       if (selectedAgentId) {
         qc.invalidateQueries({ queryKey: ["/api/admin/agents", selectedAgentId] });
+        qc.invalidateQueries({ queryKey: ["/api/admin/agents", selectedAgentId, "status"] });
       }
     },
   });
@@ -207,6 +275,7 @@ export default function AdminPage() {
       qc.invalidateQueries({ queryKey: ["/api/stats"] });
       if (selectedAgentId) {
         qc.invalidateQueries({ queryKey: ["/api/admin/agents", selectedAgentId] });
+        qc.invalidateQueries({ queryKey: ["/api/admin/agents", selectedAgentId, "status"] });
       }
     },
   });
@@ -219,6 +288,20 @@ export default function AdminPage() {
       qc.invalidateQueries({ queryKey: ["/api/agents"] });
       if (selectedAgentId) {
         qc.invalidateQueries({ queryKey: ["/api/admin/agents", selectedAgentId] });
+        qc.invalidateQueries({ queryKey: ["/api/admin/agents", selectedAgentId, "status"] });
+      }
+    },
+  });
+
+  const { mutate: updatePipelineStage, isPending: isUpdatingStage } = useMutation({
+    mutationFn: async ({ agentId, stage }: { agentId: number; stage: string }) =>
+      apiRequest("PATCH", `/api/admin/agents/${agentId}/pipeline-stage`, { stage }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/agents"] });
+      qc.invalidateQueries({ queryKey: ["/api/stats"] });
+      if (selectedAgentId) {
+        qc.invalidateQueries({ queryKey: ["/api/admin/agents", selectedAgentId] });
+        qc.invalidateQueries({ queryKey: ["/api/admin/agents", selectedAgentId, "status"] });
       }
     },
   });
@@ -266,7 +349,9 @@ export default function AdminPage() {
       sofiReferralLink: selectedAgentDetails.agent.sofiReferralLink || "",
       performanceNotes: selectedAgentDetails.agent.performanceNotes || "",
       crmRecordId: selectedAgentDetails.agent.crmRecordId || "",
-      crmPipelineStage: selectedAgentDetails.agent.crmPipelineStage || "Applicant",
+      crmPipelineStage: PIPELINE_STAGES.includes(selectedAgentDetails.agent.crmPipelineStage as any)
+        ? (selectedAgentDetails.agent.crmPipelineStage as any)
+        : "Applicant",
     });
   }, [selectedAgentDetails]);
 
@@ -640,7 +725,22 @@ export default function AdminPage() {
 
                     <label className="space-y-1">
                       <span className="text-xs uppercase tracking-widest text-muted-foreground">CRM Stage</span>
-                      <Input value={editForm.crmPipelineStage} onChange={(e) => setEditForm((current) => ({ ...current, crmPipelineStage: e.target.value }))} placeholder="Applicant" />
+                      <select
+                        value={editForm.crmPipelineStage}
+                        onChange={(e) => {
+                          const next = e.target.value;
+                          setEditForm((current) => ({ ...current, crmPipelineStage: next }));
+                          if (selectedAgentId) {
+                            updatePipelineStage({ agentId: selectedAgentId, stage: next });
+                          }
+                        }}
+                        disabled={isUpdatingStage}
+                        className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm disabled:opacity-60"
+                      >
+                        {PIPELINE_STAGES.map((stage) => (
+                          <option key={stage} value={stage}>{stage}</option>
+                        ))}
+                      </select>
                     </label>
 
                     <label className="space-y-1">
@@ -709,6 +809,24 @@ export default function AdminPage() {
                       rows={4}
                     />
                   </label>
+                </div>
+
+                <div className="space-y-3 rounded-xl border border-border p-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-semibold text-sm tracking-wide">Recent Updates</h4>
+                    <span className="text-xs text-muted-foreground">{selectedAgentStatus?.events?.length ? `${selectedAgentStatus.events.length} events` : "—"}</span>
+                  </div>
+                  <div className="space-y-2">
+                    {(selectedAgentStatus?.events || []).slice(0, 12).map((evt) => (
+                      <div key={evt.id} className="rounded-lg bg-muted/40 px-3 py-2">
+                        <p className="text-sm font-medium">{formatEventLabel(evt)}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{formatEventTime(evt.createdAt)}</p>
+                      </div>
+                    ))}
+                    {(selectedAgentStatus?.events || []).length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No updates yet.</p>
+                    ) : null}
+                  </div>
                 </div>
 
                 <div className="space-y-3 rounded-xl border border-border p-4">

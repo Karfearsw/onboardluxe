@@ -48,12 +48,18 @@ NODE_ENV=production node dist/index.cjs
 ## Data & Storage
 
 - DB: stored in Postgres (Neon) configured by `DATABASE_URL` in Vercel project env vars.
-- Tables: `hr_agents`, `hr_onboarding_tasks`, `hr_documents`, `hr_ica_signatures`, `hr_training_progress`
+- Tables: `hr_agents`, `hr_onboarding_tasks`, `hr_documents`, `hr_ica_signatures`, `hr_training_progress`, `hr_agent_sessions`, `hr_status_events`
 - Documents: current UI flow stores document metadata + `fileUrl` in `hr_documents` (it does not upload binary files by itself).
 
 ## Discord Notifications (Optional)
 
-- Set `DISCORD_WEBHOOK_URL` to enable event notifications (agent created, docs added, ICA signed, payout/training updates).
+- Set `DISCORD_WEBHOOK_URL` to enable event notifications (agent created, docs added, ICA signed, payout/training updates, pipeline stage changes, onboarding completion).
+
+## Application Status
+
+- Hiring pipeline stage is stored in `hr_agents.crm_pipeline_stage` and standardized to:
+  - `Applicant → Interview → Offer → Hired → Active`
+- Status history is written to `hr_status_events` and surfaced in Admin + Agent dashboards.
 
 ## SoFi Referral Link (Optional)
 
