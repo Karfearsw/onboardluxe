@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { getSharedAuthDiagnostics, requireSharedAdmin, requireSharedAuth } from "./auth.js";
+import { clearAgentSessionCookie, createAgentSession, deleteAgentSession, requireAgentAuth, requireAgentOrAdmin, setAgentSessionCookie } from "./agent-auth.js";
 import { pool } from "./db.js";
 import { sendDiscordWebhook } from "./discord.js";
 import { storage } from "./storage.js";
@@ -100,13 +101,54 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   }
 
+  app.post("/api/agent/login", async (req, res) => {
+    const schema = z.object({ email: z.string().email(), phoneLast4: z.string().trim().regex(/^\d{4}$/) });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid login payload", issues: parsed.error.issues });
+    }
+
+    const agent = await storage.getAgentByEmail(parsed.data.email.toLowerCase());
+    if (!agent) return res.status(401).json({ message: "Invalid credentials" });
+
+    const digits = String(agent.phone || "").replace(/\D/g, "");
+    const last4 = digits.slice(-4);
+    if (!last4 || last4 !== parsed.data.phoneLast4) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+
+    const session = await createAgentSession(agent.id);
+    setAgentSessionCookie(res, session.token);
+    return res.json({ ok: true, agentId: agent.id });
+  });
+
+  app.post("/api/agent/logout", requireAgentAuth, async (req, res) => {
+    const token = req.agentUser?.sessionToken;
+    if (token) {
+      await deleteAgentSession(token);
+    }
+    clearAgentSessionCookie(res);
+    res.json({ ok: true });
+  });
+
+  app.get("/api/agent/me", requireAgentAuth, async (req, res) => {
+    const agentId = req.agentUser!.agentId;
+    const [agent, tasks] = await Promise.all([
+      storage.getAgent(agentId),
+      storage.getOnboardingTasks(agentId),
+    ]);
+
+    if (!agent) return res.status(404).json({ message: "Agent not found" });
+    res.json({ agent, tasks });
+  });
+
   // ── Agents ────────────────────────────────────────────────────────────────
   app.get("/api/agents", requireSharedAdmin, async (_req, res) => {
     const all = await storage.getAllAgents();
     res.json(all);
   });
 
-  app.get("/api/agents/:id", async (req, res) => {
+  app.get("/api/agents/:id", requireAgentOrAdmin("id"), async (req, res) => {
     const agent = await storage.getAgent(Number(req.params.id));
     if (!agent) return res.status(404).json({ message: "Agent not found" });
     res.json(agent);
@@ -138,6 +180,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // Mark first step in progress
       await storage.updateTaskStatus(agent.id, "profile", "in_progress");
       await storage.initTrainingModules(agent.id);
+      const session = await createAgentSession(agent.id);
+      setAgentSessionCookie(res, session.token);
       void sendDiscordWebhook("agent.created", { agent }).catch((error) => {
         console.error("Discord webhook failed (agent.created):", error);
       });
@@ -219,50 +263,50 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ── Onboarding ────────────────────────────────────────────────────────────
-  app.get("/api/agents/:id/onboarding", async (req, res) => {
-    const tasks = await storage.getOnboardingTasks(Number(req.params.id));
+  app.get("/api/agents/:id/onboarding", requireAgentOrAdmin("id"), async (req, res) => {
+    const tasks = await storage.getOnboardingTasks(Number(String(req.params.id)));
     res.json(tasks);
   });
 
-  app.patch("/api/agents/:id/onboarding/:taskKey", async (req, res) => {
+  app.patch("/api/agents/:id/onboarding/:taskKey", requireAgentOrAdmin("id"), async (req, res) => {
     const { status } = onboardingStatusSchema.parse(req.body);
-    const task = await storage.updateTaskStatus(Number(req.params.id), req.params.taskKey, status);
+    const task = await storage.updateTaskStatus(Number(String(req.params.id)), String(req.params.taskKey), status);
     if (!task) return res.status(404).json({ message: "Task not found" });
 
     // Auto-advance agent's onboarding step
     if (status === "complete") {
-      const tasks = await storage.getOnboardingTasks(Number(req.params.id));
+      const tasks = await storage.getOnboardingTasks(Number(String(req.params.id)));
       const nextPending = tasks.find((t) => t.status === "pending");
       const allComplete = tasks.every((t) => t.status === "complete");
 
       if (nextPending) {
-        await storage.updateTaskStatus(Number(req.params.id), nextPending.taskKey, "in_progress");
-        await storage.updateAgent(Number(req.params.id), { onboardingStep: nextPending.stepNumber });
+        await storage.updateTaskStatus(Number(String(req.params.id)), nextPending.taskKey, "in_progress");
+        await storage.updateAgent(Number(String(req.params.id)), { onboardingStep: nextPending.stepNumber });
       }
       if (allComplete) {
-        await storage.updateAgent(Number(req.params.id), { onboardingComplete: true, onboardingStep: 6 });
+        await storage.updateAgent(Number(String(req.params.id)), { onboardingComplete: true, onboardingStep: 6 });
       }
     }
     res.json(task);
   });
 
   // ── ICA Signature ─────────────────────────────────────────────────────────
-  app.get("/api/agents/:id/ica", async (req, res) => {
-    const sig = await storage.getIcaSignature(Number(req.params.id));
+  app.get("/api/agents/:id/ica", requireAgentOrAdmin("id"), async (req, res) => {
+    const sig = await storage.getIcaSignature(Number(String(req.params.id)));
     res.json(sig || null);
   });
 
-  app.post("/api/agents/:id/ica", async (req, res) => {
+  app.post("/api/agents/:id/ica", requireAgentOrAdmin("id"), async (req, res) => {
     try {
       const data = insertIcaSignatureSchema.parse({
         ...req.body,
-        agentId: Number(req.params.id),
+        agentId: Number(String(req.params.id)),
         signedAt: new Date().toISOString(),
       });
       const sig = await storage.createIcaSignature(data);
       // Mark ICA task complete
-      await storage.updateTaskStatus(Number(req.params.id), "ica", "complete");
-      void sendDiscordWebhook("agent.ica_signed", { agentId: Number(req.params.id), signature: sig }).catch((error) => {
+      await storage.updateTaskStatus(Number(String(req.params.id)), "ica", "complete");
+      void sendDiscordWebhook("agent.ica_signed", { agentId: Number(String(req.params.id)), signature: sig }).catch((error) => {
         console.error("Discord webhook failed (agent.ica_signed):", error);
       });
       res.status(201).json(sig);
@@ -272,16 +316,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ── Documents ─────────────────────────────────────────────────────────────
-  app.get("/api/agents/:id/documents", async (req, res) => {
-    const docs = await storage.getDocuments(Number(req.params.id));
+  app.get("/api/agents/:id/documents", requireAgentOrAdmin("id"), async (req, res) => {
+    const docs = await storage.getDocuments(Number(String(req.params.id)));
     res.json(docs);
   });
 
-  app.post("/api/agents/:id/documents", async (req, res) => {
+  app.post("/api/agents/:id/documents", requireAgentOrAdmin("id"), async (req, res) => {
     try {
       const { docType, fileName, fileUrl } = req.body;
       const doc = await storage.createDocument({
-        agentId: Number(req.params.id),
+        agentId: Number(String(req.params.id)),
         docType,
         fileName,
         fileUrl: fileUrl || `/uploads/${fileName}`,
@@ -291,9 +335,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // Mark corresponding task complete
       const taskKeyMap: Record<string, string> = { W9: "w9", ID: "id_upload" };
       if (taskKeyMap[docType]) {
-        await storage.updateTaskStatus(Number(req.params.id), taskKeyMap[docType], "complete");
+        await storage.updateTaskStatus(Number(String(req.params.id)), taskKeyMap[docType], "complete");
       }
-      void sendDiscordWebhook("agent.document_added", { agentId: Number(req.params.id), document: doc }).catch((error) => {
+      void sendDiscordWebhook("agent.document_added", { agentId: Number(String(req.params.id)), document: doc }).catch((error) => {
         console.error("Discord webhook failed (agent.document_added):", error);
       });
       res.status(201).json(doc);
@@ -303,7 +347,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ── Payout Setup ──────────────────────────────────────────────────────────
-  app.post("/api/agents/:id/payout", async (req, res) => {
+  app.post("/api/agents/:id/payout", requireAgentOrAdmin("id"), async (req, res) => {
     const parsed = payoutSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: "Invalid payout payload", issues: parsed.error.issues });
@@ -326,23 +370,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const shouldAttachLink = ["Invited", "Opened", "Bonus Confirmed"].includes(sofiReferralStatus);
     const sofiReferralLink = (rawSofiReferralLink?.trim() || (shouldAttachLink ? envLink : "")).trim();
 
-    const agent = await storage.updateAgent(Number(req.params.id), {
+    const agent = await storage.updateAgent(Number(String(req.params.id)), {
       payoutMethodType,
       payoutDetails,
       sofiReferralStatus,
       sofiReferralLink,
     });
     if (!agent) return res.status(404).json({ message: "Agent not found" });
-    await storage.updateTaskStatus(Number(req.params.id), "payout", "complete");
+    await storage.updateTaskStatus(Number(String(req.params.id)), "payout", "complete");
     void sendDiscordWebhook("agent.payout_submitted", { agent }).catch((error) => {
       console.error("Discord webhook failed (agent.payout_submitted):", error);
     });
     res.json(agent);
   });
 
-  app.post("/api/agents/:id/sofi/opened", async (req, res) => {
+  app.post("/api/agents/:id/sofi/opened", requireAgentOrAdmin("id"), async (req, res) => {
     const envLink = process.env.SOFI_REFERRAL_LINK?.trim() ?? "";
-    const agent = await storage.updateAgent(Number(req.params.id), {
+    const agent = await storage.updateAgent(Number(String(req.params.id)), {
       sofiReferralStatus: "Opened",
       sofiReferralLink: envLink,
     });
@@ -351,19 +395,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ── Training ──────────────────────────────────────────────────────────────
-  app.get("/api/agents/:id/training", async (req, res) => {
-    const progress = await storage.getTrainingProgress(Number(req.params.id));
+  app.get("/api/agents/:id/training", requireAgentOrAdmin("id"), async (req, res) => {
+    const progress = await storage.getTrainingProgress(Number(String(req.params.id)));
     res.json(progress);
   });
 
-  app.post("/api/agents/:id/training/:moduleKey/complete", async (req, res) => {
-    const progress = await storage.upsertTrainingProgress(Number(req.params.id), req.params.moduleKey);
+  app.post("/api/agents/:id/training/:moduleKey/complete", requireAgentOrAdmin("id"), async (req, res) => {
+    const progress = await storage.upsertTrainingProgress(Number(String(req.params.id)), String(req.params.moduleKey));
     // Check if all training modules done
-    const all = await storage.getTrainingProgress(Number(req.params.id));
+    const all = await storage.getTrainingProgress(Number(String(req.params.id)));
     if (all.length > 0 && all.every((m) => m.completed)) {
-      await storage.updateTaskStatus(Number(req.params.id), "training", "complete");
+      await storage.updateTaskStatus(Number(String(req.params.id)), "training", "complete");
     }
-    void sendDiscordWebhook("agent.training_completed", { agentId: Number(req.params.id), moduleKey: req.params.moduleKey, progress }).catch((error) => {
+    void sendDiscordWebhook("agent.training_completed", { agentId: Number(String(req.params.id)), moduleKey: String(req.params.moduleKey), progress }).catch((error) => {
       console.error("Discord webhook failed (agent.training_completed):", error);
     });
     res.json(progress);

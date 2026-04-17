@@ -9,6 +9,7 @@
 |-------|-------------|
 | `/` | Landing page — agent recruitment |
 | `/#/register` | Agent registration (Step 1) |
+| `/#/agent` | Agent dashboard (resume onboarding) |
 | `/#/onboarding/:id` | 6-step onboarding wizard |
 | `/#/admin` | Admin hiring dashboard |
 
@@ -58,6 +59,13 @@ NODE_ENV=production node dist/index.cjs
 
 - Set `SOFI_REFERRAL_LINK` to display the team’s recommended SoFi referral link inside the Payout Setup step and to track referral status (`Invited`/`Opened`/`Bonus Confirmed`).
 - Also set `VITE_SOFI_REFERRAL_LINK` to expose the same link to the frontend build (Vite only exposes variables prefixed with `VITE_`).
+
+## Agent Sessions (Optional)
+
+- Agent access is secured via an HttpOnly session cookie (`ol_agent_session`).
+- Set:
+  - `AGENT_SESSION_COOKIE_DOMAIN=.oceanluxe.org`
+  - `AGENT_SESSION_TTL_DAYS=30`
 
 ## Debug Endpoints (Optional)
 

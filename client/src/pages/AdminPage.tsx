@@ -136,6 +136,8 @@ export default function AdminPage() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [onboardingFilter, setOnboardingFilter] = useState("all");
+  const [authDiag, setAuthDiag] = useState<any | null>(null);
+  const [authDiagError, setAuthDiagError] = useState<string>("");
   const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState({
     subscriptionStatus: "Trial",
@@ -279,6 +281,7 @@ export default function AdminPage() {
   }
 
   if (!currentAdmin) {
+    const isVercel = typeof window !== "undefined" && window.location.hostname.endsWith("vercel.app");
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-6">
         <div className="max-w-md w-full bg-card border border-border rounded-2xl p-6 text-center space-y-4">
@@ -288,18 +291,63 @@ export default function AdminPage() {
             <p className="text-sm text-muted-foreground mt-2">
               The HR admin uses the same shared session as Ocean Luxe RM. Sign in through Luxe RM first, then return here.
             </p>
+            {isVercel && (
+              <p className="text-xs text-destructive mt-3">
+                Admin SSO will not work on vercel.app. Use career.oceanluxe.org so the shared cookie can be read on this domain.
+              </p>
+            )}
           </div>
-          <a
-            href="https://deals.oceanluxe.org"
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-semibold"
-            style={{ background: "#0a0a0a", color: "hsl(43,85%,52%)" }}
-          >
-            Open Luxe RM
-          </a>
+          <div className="flex flex-col gap-2">
+            {isVercel && (
+              <a
+                href="https://career.oceanluxe.org/#/admin"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-semibold"
+                style={{ background: "#0a0a0a", color: "hsl(43,85%,52%)" }}
+              >
+                Open career.oceanluxe.org →
+              </a>
+            )}
+            <a
+              href="https://deals.oceanluxe.org"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-semibold"
+              style={{ background: "#0a0a0a", color: "hsl(43,85%,52%)" }}
+            >
+              Open Luxe RM
+            </a>
+            <button
+              type="button"
+              onClick={async () => {
+                setAuthDiagError("");
+                setAuthDiag(null);
+                try {
+                  const res = await fetch("/api/debug/auth", { credentials: "include" });
+                  if (!res.ok) {
+                    const text = await res.text();
+                    setAuthDiagError(text || `Diagnostics failed: ${res.status}`);
+                    return;
+                  }
+                  setAuthDiag(await res.json());
+                } catch (e: any) {
+                  setAuthDiagError(e?.message || "Diagnostics failed");
+                }
+              }}
+              className="inline-flex items-center justify-center rounded-md border border-border px-4 py-2 text-sm font-semibold text-muted-foreground hover:text-foreground"
+            >
+              Check Auth Diagnostics
+            </button>
+          </div>
           {hasAdminAccessError && (
             <p className="text-xs text-destructive">Admin session could not be loaded. Make sure the shared auth cookie is available on this domain.</p>
+          )}
+          {authDiagError && <p className="text-xs text-destructive">{authDiagError}</p>}
+          {authDiag && (
+            <pre className="text-[11px] text-left whitespace-pre-wrap break-words rounded-lg border border-border bg-muted/30 p-3 max-h-48 overflow-auto">
+              {JSON.stringify(authDiag, null, 2)}
+            </pre>
           )}
         </div>
       </div>

@@ -544,7 +544,7 @@ export default function OnboardingPage() {
   const qc = useQueryClient();
   const { toast } = useToast();
 
-  const { data: agent, isLoading: agentLoading } = useQuery<Agent>({
+  const { data: agent, isLoading: agentLoading, error: agentError } = useQuery<Agent>({
     queryKey: ["/api/agents", agentId],
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/agents/${agentId}`);
@@ -552,13 +552,20 @@ export default function OnboardingPage() {
     },
   });
 
-  const { data: tasks = [] } = useQuery<OnboardingTask[]>({
+  const { data: tasks = [], error: tasksError } = useQuery<OnboardingTask[]>({
     queryKey: ["/api/agents", agentId, "onboarding"],
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/agents/${agentId}/onboarding`);
       return res.json();
     },
   });
+
+  useEffect(() => {
+    const msg = String((agentError as any)?.message || (tasksError as any)?.message || "");
+    if (msg.startsWith("401:")) {
+      navigate("/agent");
+    }
+  }, [agentError, tasksError]);
 
   const getTask = (key: string) => tasks.find(t => t.taskKey === key);
   const completedCount = tasks.filter(t => t.status === "complete").length;

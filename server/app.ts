@@ -1,6 +1,7 @@
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import { createServer } from "http";
 import { attachSharedAuthUser } from "./auth.js";
+import { attachAgentUser } from "./agent-auth.js";
 import { registerRoutes } from "./routes.js";
 import { serveStatic } from "./static.js";
 import path from "path";
@@ -35,6 +36,7 @@ export async function createApp() {
   );
   app.use(express.urlencoded({ extended: false }));
   app.use(attachSharedAuthUser);
+  app.use(attachAgentUser);
   app.use("/training", express.static(path.resolve(process.cwd(), "script")));
 
   app.use((req, res, next) => {

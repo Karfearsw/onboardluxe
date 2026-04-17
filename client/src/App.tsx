@@ -7,6 +7,7 @@ import { Toaster } from "@/components/ui/toaster";
 import LandingPage from "./pages/LandingPage";
 import RegisterPage from "./pages/RegisterPage";
 import OnboardingPage from "./pages/OnboardingPage";
+import AgentDashboardPage from "./pages/AgentDashboardPage";
 import AdminPage from "./pages/AdminPage";
 import NotFound from "./pages/not-found";
 
@@ -17,6 +18,7 @@ export default function App() {
         <Switch>
           <Route path="/" component={LandingPage} />
           <Route path="/register" component={RegisterPage} />
+          <Route path="/agent" component={AgentDashboardPage} />
           <Route path="/onboarding/:id" component={OnboardingPage} />
           <Route path="/admin" component={AdminPage} />
           <Route component={NotFound} />

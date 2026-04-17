@@ -36,7 +36,7 @@ export default function RegisterPage() {
     },
     onSuccess: (agent) => {
       toast({ title: "Welcome to Ocean Luxe!", description: "Your agent profile has been created." });
-      navigate(`/onboarding/${agent.id}`);
+      navigate("/agent");
     },
     onError: (e: any) => {
       toast({ title: "Error", description: e.message, variant: "destructive" });
