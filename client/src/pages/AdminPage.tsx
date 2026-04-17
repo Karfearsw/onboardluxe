@@ -199,6 +199,9 @@ export default function AdminPage() {
   const [onboardingFilter, setOnboardingFilter] = useState("all");
   const [authDiag, setAuthDiag] = useState<any | null>(null);
   const [authDiagError, setAuthDiagError] = useState<string>("");
+  const [hrAccessCode, setHrAccessCode] = useState("");
+  const [hrAccessError, setHrAccessError] = useState("");
+  const [hrAccessLoading, setHrAccessLoading] = useState(false);
   const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState({
     subscriptionStatus: "Trial",
@@ -403,6 +406,48 @@ export default function AdminPage() {
             >
               Open Luxe RM
             </a>
+
+            <div className="rounded-xl border border-border p-4 text-left space-y-2">
+              <p className="text-xs uppercase tracking-widest text-muted-foreground">HR Access Code</p>
+              <Input
+                value={hrAccessCode}
+                onChange={(e) => setHrAccessCode(e.target.value)}
+                placeholder="Enter access code"
+                type="password"
+              />
+              <button
+                type="button"
+                onClick={async () => {
+                  setHrAccessError("");
+                  setHrAccessLoading(true);
+                  try {
+                    const res = await fetch("/api/admin/access/login", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ code: hrAccessCode }),
+                      credentials: "include",
+                    });
+                    if (!res.ok) {
+                      const text = await res.text();
+                      setHrAccessError(text || `Login failed: ${res.status}`);
+                      return;
+                    }
+                    await qc.invalidateQueries({ queryKey: ["/api/admin/me"] });
+                  } catch (e: any) {
+                    setHrAccessError(e?.message || "Login failed");
+                  } finally {
+                    setHrAccessLoading(false);
+                  }
+                }}
+                disabled={!hrAccessCode.trim() || hrAccessLoading}
+                className="inline-flex w-full items-center justify-center rounded-md px-4 py-2 text-sm font-semibold disabled:opacity-50"
+                style={{ background: "#0a0a0a", color: "hsl(43,85%,52%)" }}
+              >
+                Sign In →
+              </button>
+              {hrAccessError ? <p className="text-xs text-destructive">{hrAccessError}</p> : null}
+            </div>
+
             <button
               type="button"
               onClick={async () => {

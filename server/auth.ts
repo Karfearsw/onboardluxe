@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import { pool } from "./db.js";
 import crypto from "crypto";
+import { HR_ADMIN_COOKIE_NAME, verifyHrAdminToken } from "./hr-admin-access.js";
 
 const DEFAULT_COOKIE_NAMES = [
   "connect.sid",
@@ -292,15 +293,35 @@ export async function attachSharedAuthUser(req: Request, _res: Response, next: N
     const cookieNames = getConfiguredCookieNames();
     const sessionToken = cookieNames.map((name) => cookies.get(name)).find(Boolean);
 
-    if (!sessionToken) {
+    if (sessionToken) {
+      const mode = getAuthMode();
+      req.authUser = mode === "express_session"
+        ? await findAuthUserFromExpressSessionCookie(sessionToken)
+        : await findAuthUserBySessionToken(sessionToken);
+    } else {
       req.authUser = null;
-      return next();
     }
 
-    const mode = getAuthMode();
-    req.authUser = mode === "express_session"
-      ? await findAuthUserFromExpressSessionCookie(sessionToken)
-      : await findAuthUserBySessionToken(sessionToken);
+    if (!req.authUser) {
+      const hrToken = cookies.get(HR_ADMIN_COOKIE_NAME);
+      if (hrToken) {
+        const verified = verifyHrAdminToken(hrToken);
+        if (verified) {
+          req.authUser = {
+            id: "hr_admin",
+            email: null,
+            name: "HR Admin",
+            role: verified.role,
+            organizationId: null,
+            organizationName: null,
+            organizationSlug: null,
+            organizationRole: null,
+            sessionToken: "hr_admin",
+          };
+        }
+      }
+    }
+
     return next();
   } catch (error) {
     return next(error);

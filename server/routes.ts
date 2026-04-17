@@ -4,6 +4,7 @@ import { getSharedAuthDiagnostics, requireSharedAdmin, requireSharedAuth } from 
 import { clearAgentSessionCookie, createAgentSession, deleteAgentSession, requireAgentAuth, requireAgentOrAdmin, setAgentSessionCookie } from "./agent-auth.js";
 import { pool } from "./db.js";
 import { sendDiscordWebhook } from "./discord.js";
+import { clearHrAdminCookie, createHrAdminToken, hasHrAdminCookie, setHrAdminCookie, verifyHrAdminAccessCode } from "./hr-admin-access.js";
 import { listStatusEvents, logStatusEvent } from "./status-events.js";
 import { storage } from "./storage.js";
 import { insertAgentSchema, insertIcaSignatureSchema } from "../shared/schema.js";
@@ -27,6 +28,7 @@ const payoutSchema = z.object({
 });
 const pipelineStageSchema = z.enum(PIPELINE_STAGES);
 const pipelineStageUpdateSchema = z.object({ stage: pipelineStageSchema });
+const hrAdminLoginSchema = z.object({ code: z.string().trim().min(1) });
 
 function validatePayoutDetails(payoutMethodType: string, payoutDetails: string) {
   const value = payoutDetails.trim();
@@ -164,7 +166,32 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       debugEndpointsEnabled,
       message: debugEndpointsEnabled ? "" : "Enable DEBUG_ENDPOINTS=1 to access deeper diagnostics at /api/debug/auth",
       diagnostics,
+      hrAdmin: {
+        enabled: Boolean(process.env.HR_ADMIN_ACCESS_CODE?.trim()) && Boolean(process.env.HR_ADMIN_TOKEN_SECRET?.trim()),
+        hasCookie: hasHrAdminCookie(req),
+      },
     });
+  });
+
+  app.post("/api/admin/access/login", async (req, res) => {
+    const parsed = hrAdminLoginSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid login payload", issues: parsed.error.issues });
+    }
+
+    const ok = verifyHrAdminAccessCode(parsed.data.code);
+    if (!ok) return res.status(401).json({ message: "Invalid access code" });
+
+    const token = createHrAdminToken();
+    if (!token) return res.status(500).json({ message: "HR admin access is not configured" });
+
+    setHrAdminCookie(res, token);
+    return res.json({ ok: true });
+  });
+
+  app.post("/api/admin/access/logout", async (_req, res) => {
+    clearHrAdminCookie(res);
+    res.json({ ok: true });
   });
 
   app.post("/api/agent/login", async (req, res) => {

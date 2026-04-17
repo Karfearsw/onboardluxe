@@ -93,6 +93,20 @@ Required Vercel env vars for HR:
 - `SESSION_SECRET` (must match the CRM `express-session` secret)
 - `SESSION_TABLE=session` (default for connect-pg-simple)
 
+## HR Admin Access Code (Fallback)
+
+If `career.oceanluxe.org` is not receiving the CRM cookie (`connect.sid`), enable the fallback HR login that uses an env access code and an HttpOnly cookie (`ol_hr_admin`).
+
+Required env vars:
+
+- `HR_ADMIN_ACCESS_CODE`
+- `HR_ADMIN_TOKEN_SECRET`
+
+Optional:
+
+- `HR_ADMIN_TOKEN_TTL_DAYS` (default 7)
+- `HR_ADMIN_COOKIE_DOMAIN` (default unset; set `.oceanluxe.org` if needed)
+
 ## Brand
 
 - Colors: Black `#0a0a0a` · Gold `hsl(43,85%,52%)` · White
