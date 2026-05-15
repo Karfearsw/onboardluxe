@@ -22,6 +22,22 @@ npm run build
 npm run start
 ```
 
+### Production: Admin SSO + “user not showing”
+- Use `GET /api/admin/auth/diagnostics` first (the Admin UI shows this automatically on the sign-in screen).
+- Common root causes:
+  - HR is deployed on `*.vercel.app` (shared cookies won’t be present); deploy on `career.oceanluxe.org`.
+  - Cookie name mismatch (some deployments use `__Host-connect.sid` / `__Secure-connect.sid`).
+  - `AUTH_MODE=express_session` but `SESSION_SECRET` does not match the CRM server’s `express-session` secret, so signed cookies can’t be verified.
+  - HR is pointing at a database that does not contain the CRM `session` table (or columns/table name differs; use the `SESSION_*` env vars).
+
+### Cross-suite admin (HR + CRM + Travel)
+- This HR app authorizes access using either:
+  - the shared CRM session cookie (SSO), or
+  - the HR fallback admin cookie (`ol_hr_admin`) via access code.
+- To ensure “HR admins are also CRM admins”, enforce it at the identity/source-of-truth layer:
+  - In the CRM system, ensure the HR admin users have an `admin` (or other allowed) role stored in the session and/or membership role.
+  - Keep the allowed roles aligned across apps (in this repo: `AUTH_ALLOWED_ROLES` defaults include `admin` and `hr_admin`).
+
 ## Feature List
 
 ### Frontend (Routes)
@@ -75,6 +91,15 @@ npm run start
   - Root cause: `getConnectionString()` throws when pool is first used ([server/db.ts](file:///workspace/server/db.ts#L12-L18))
 
 ### Found by code review (needs validation in a DB-backed run)
+- High: Admin SSO “user not showing” commonly caused by cookie name/domain or session secret mismatch
+  - Symptom: `/api/admin/me` returns 401 in production, so Admin UI shows “Admin Sign-In Required” and no agents/stats load.
+  - Checks:
+    - Open `/#/admin` and review the auto-loaded diagnostics output (or click “Check Auth Diagnostics”).
+    - Confirm the HR site is on the same root domain as CRM (`career.oceanluxe.org`, not `*.vercel.app`) so cookies can be shared ([README.md](file:///workspace/README.md#L84-L88)).
+    - Confirm `AUTH_MODE=express_session`, `AUTH_COOKIE_NAMES`, and `SESSION_SECRET` match the CRM setup ([README.md](file:///workspace/README.md#L89-L95)).
+  - Code notes:
+    - The server now checks additional cookie name variants: [auth.ts](file:///workspace/server/auth.ts#L6-L15)
+    - Auth diagnostics endpoint: `GET /api/admin/auth/diagnostics` ([routes.ts](file:///workspace/server/routes.ts#L155-L174))
 - High: Local Postgres without SSL is not supported by current DB client config
   - Why: `pg.Pool` is created with `ssl: { rejectUnauthorized: false }` unconditionally ([server/db.ts](file:///workspace/server/db.ts#L20-L27))
   - Impact: connecting to a typical local Postgres (no TLS) will fail unless TLS is enabled server-side
@@ -114,4 +139,3 @@ npm run start
   - Foreign keys for `agent_id` relations
   - Unique constraints for natural keys (email already unique in `hr_agents`)
   - Composite indexes for common filters (e.g., `(agent_id, status)`, `(created_at)` for events)
-

@@ -5,6 +5,8 @@ import { HR_ADMIN_COOKIE_NAME, verifyHrAdminToken } from "./hr-admin-access.js";
 
 const DEFAULT_COOKIE_NAMES = [
   "connect.sid",
+  "__Host-connect.sid",
+  "__Secure-connect.sid",
   "__Secure-better-auth.session_token",
   "better-auth.session_token",
   "__Secure-authjs.session-token",
@@ -69,10 +71,14 @@ function getConfiguredCookieNames() {
 
 function getAllowedRoles() {
   const configured = process.env.AUTH_ALLOWED_ROLES?.split(",")
-    .map((value) => value.trim().toLowerCase())
+    .map((value) => normalizeRole(value))
     .filter(Boolean);
 
   return configured?.length ? configured : DEFAULT_ALLOWED_ROLES;
+}
+
+function normalizeRole(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, "_").replace(/-/g, "_");
 }
 
 type AuthMode = "neon_auth" | "express_session";
@@ -372,7 +378,7 @@ export function requireSharedAdmin(req: Request, res: Response, next: NextFuncti
   const allowedRoles = getAllowedRoles();
   const assignedRoles = [req.authUser.role, req.authUser.organizationRole]
     .filter(Boolean)
-    .map((value) => String(value).toLowerCase());
+    .map((value) => normalizeRole(String(value)));
 
   const isAllowed = assignedRoles.some((role) => allowedRoles.includes(role));
 

@@ -199,6 +199,7 @@ export default function AdminPage() {
   const [onboardingFilter, setOnboardingFilter] = useState("all");
   const [authDiag, setAuthDiag] = useState<any | null>(null);
   const [authDiagError, setAuthDiagError] = useState<string>("");
+  const [autoLoadedDiagnostics, setAutoLoadedDiagnostics] = useState(false);
   const [hrAccessCode, setHrAccessCode] = useState("");
   const [hrAccessError, setHrAccessError] = useState("");
   const [hrAccessLoading, setHrAccessLoading] = useState(false);
@@ -231,6 +232,28 @@ export default function AdminPage() {
       return res.json();
     },
   });
+
+  useEffect(() => {
+    if (isLoadingAdmin) return;
+    if (currentAdmin) return;
+    if (autoLoadedDiagnostics) return;
+    setAutoLoadedDiagnostics(true);
+    setAuthDiagError("");
+    fetch("/api/admin/auth/diagnostics", { credentials: "include" })
+      .then(async (res) => {
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || `Diagnostics failed: ${res.status}`);
+        }
+        return res.json();
+      })
+      .then((data) => {
+        setAuthDiag(data);
+      })
+      .catch((e: any) => {
+        setAuthDiagError(e?.message || "Diagnostics failed");
+      });
+  }, [autoLoadedDiagnostics, currentAdmin, isLoadingAdmin]);
 
   const { data: stats } = useQuery<Stats>({
     queryKey: ["/api/stats"],
