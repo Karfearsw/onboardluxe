@@ -13,6 +13,33 @@ import { z } from "zod";
 
 const debugEndpointsEnabled = process.env.DEBUG_ENDPOINTS === "1" || process.env.NODE_ENV !== "production";
 
+function normalizeHost(value: string) {
+  return value.trim().toLowerCase().replace(/:\d+$/, "");
+}
+
+function getRequestHost(req: { headers: Record<string, unknown> }) {
+  const forwarded = req.headers["x-forwarded-host"];
+  const raw = typeof forwarded === "string"
+    ? forwarded.split(",")[0] ?? ""
+    : typeof req.headers.host === "string"
+      ? req.headers.host
+      : "";
+  return normalizeHost(raw);
+}
+
+function signupIsAllowed(req: { headers: Record<string, unknown> }) {
+  if (process.env.NODE_ENV !== "production") return true;
+  if ((process.env.APP_PUBLIC_SIGNUP || "").trim() === "1") return true;
+
+  const host = getRequestHost(req);
+  const allowed = (process.env.SIGNUP_ALLOWED_HOSTS || "")
+    .split(",")
+    .map((value) => normalizeHost(value))
+    .filter(Boolean);
+  if (!allowed.length) return false;
+  return allowed.includes(host);
+}
+
 const agentUpdateSchema = insertAgentSchema.partial();
 const onboardingStatusSchema = z.object({
   status: z.enum(["pending", "in_progress", "complete"]),
@@ -255,6 +282,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.post("/api/agents", async (req, res) => {
+    if (!signupIsAllowed(req)) {
+      return res.status(403).json({
+        message: "Signup is disabled on this deployment.",
+        host: getRequestHost(req),
+      });
+    }
+
     try {
       const data = insertAgentSchema.parse({
         ...req.body,

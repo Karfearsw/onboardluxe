@@ -1,7 +1,8 @@
-import { ensureDatabase, pool } from "./db.ts";
+import { migrateDatabase, pool } from "./db.ts";
 
 (async () => {
-  await ensureDatabase();
+  process.env.AUTO_APPLY_MIGRATIONS = "1";
+  await migrateDatabase();
   console.log("Database initialized successfully.");
   await pool.end();
 })();

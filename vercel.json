@@ -6,7 +6,7 @@
       "src": "api/[...path].ts",
       "use": "@vercel/node",
       "config": {
-        "includeFiles": ["server/**", "shared/**"]
+        "includeFiles": ["server/**", "shared/**", "migrations/**"]
       }
     },
     {

@@ -14,7 +14,8 @@ npm run dev
 ```
 
 - App listens on port 5000 by default ([server/index.ts](file:///workspace/server/index.ts#L6-L15)).
-- The server will start even if `DATABASE_URL` is missing, but DB-backed endpoints will return 500.
+- In preview/production runtimes, the server fails fast if `DATABASE_URL` (or fallbacks) is missing.
+- Signup is disabled by default in strict environments (preview/prod) unless `APP_PUBLIC_SIGNUP=1` or `SIGNUP_ALLOWED_HOSTS` allows the current hostname ([routes.ts](file:///workspace/server/routes.ts#L16-L52)).
 
 ### Production build
 ```bash
