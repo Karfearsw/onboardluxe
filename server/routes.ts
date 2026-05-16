@@ -142,7 +142,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       await pool.query("select 1 as ok");
       return res.json({ ok: true, dbOk: true });
     } catch {
-      return res.json({ ok: true, dbOk: false });
+      return res.status(503).json({ ok: false, dbOk: false });
     }
   });
 
