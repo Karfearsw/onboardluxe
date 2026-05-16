@@ -137,6 +137,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     };
   }
 
+  app.get("/api/healthz", async (_req, res) => {
+    try {
+      await pool.query("select 1 as ok");
+      return res.json({ ok: true, dbOk: true });
+    } catch {
+      return res.json({ ok: true, dbOk: false });
+    }
+  });
+
   if (debugEndpointsEnabled) {
     app.get("/api/health", async (_req, res) => {
       try {

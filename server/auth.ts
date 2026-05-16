@@ -104,6 +104,13 @@ function safeEqual(a: string, b: string) {
   return crypto.timingSafeEqual(aBuf, bBuf);
 }
 
+function getSessionSecrets() {
+  return (process.env.SESSION_SECRET || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
 function unsignExpressSessionCookie(rawValue: string, secret: string) {
   if (!rawValue.startsWith("s:")) return null;
 
@@ -234,8 +241,10 @@ function extractActiveOrganizationIdFromSession(session: any) {
 }
 
 async function findAuthUserFromExpressSessionCookie(rawCookieValue: string): Promise<SharedAuthUser | null> {
-  const secrets = (process.env.SESSION_SECRET ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-  const sid = secrets.length ? secrets.reduce((found, secret) => found ?? unsignExpressSessionCookie(rawCookieValue, secret), null) : null;
+  const secrets = getSessionSecrets();
+  const sid = rawCookieValue.startsWith("s:")
+    ? (secrets.map((secret) => unsignExpressSessionCookie(rawCookieValue, secret)).find(Boolean) ?? null)
+    : null;
   const effectiveSid = sid ?? (!rawCookieValue.startsWith("s:") ? rawCookieValue : null);
 
   if (!effectiveSid) {
@@ -430,8 +439,11 @@ export async function getSharedAuthDiagnostics(req: Request) {
     return response;
   }
 
-  const diagSecrets = (process.env.SESSION_SECRET ?? "").split(",").map((s) => s.trim()).filter(Boolean); const secretSet = diagSecrets.length > 0;
-  const unsignedSid = secretSet ? diagSecrets.reduce((found, secret) => found ?? unsignExpressSessionCookie(rawCookieValue, secret), null) : null;
+  const secrets = getSessionSecrets();
+  const secretSet = secrets.length > 0;
+  const unsignedSid = rawCookieValue.startsWith("s:")
+    ? (secrets.map((secret) => unsignExpressSessionCookie(rawCookieValue, secret)).find(Boolean) ?? null)
+    : null;
   const effectiveSid = unsignedSid ?? (!rawCookieValue.startsWith("s:") ? rawCookieValue : null);
 
   response.expressSession = {
