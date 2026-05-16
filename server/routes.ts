@@ -197,10 +197,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
 
     const diagnostics = await getSharedAuthDiagnostics(req);
+    const staleCookieLikely = Boolean((diagnostics as any)?.staleCookieLikely);
+    const actionHint = typeof (diagnostics as any)?.actionHint === "string" ? (diagnostics as any).actionHint : null;
     res.json({
       dbOk,
       debugEndpointsEnabled,
       message: debugEndpointsEnabled ? "" : "Enable DEBUG_ENDPOINTS=1 to access deeper diagnostics at /api/debug/auth",
+      staleCookieLikely,
+      actionHint,
       diagnostics,
       hrAdmin: {
         enabled: Boolean(process.env.HR_ADMIN_ACCESS_CODE?.trim()) && Boolean(process.env.HR_ADMIN_TOKEN_SECRET?.trim()),

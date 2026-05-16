@@ -393,6 +393,8 @@ export default function AdminPage() {
 
   if (!currentAdmin) {
     const isVercel = typeof window !== "undefined" && window.location.hostname.endsWith("vercel.app");
+    const staleCookieLikely = Boolean(authDiag?.staleCookieLikely);
+    const actionHint = typeof authDiag?.actionHint === "string" ? authDiag.actionHint : "";
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-6">
         <div className="max-w-md w-full bg-card border border-border rounded-2xl p-6 text-center space-y-4">
@@ -408,6 +410,12 @@ export default function AdminPage() {
               </p>
             )}
           </div>
+          {staleCookieLikely ? (
+            <div className="rounded-xl border border-border p-4 text-left space-y-1 bg-muted/30">
+              <p className="text-sm font-semibold">Stale session cookie detected</p>
+              <p className="text-xs text-muted-foreground">{actionHint || "Clear cookies for this domain and sign in again in the CRM, then refresh this page."}</p>
+            </div>
+          ) : null}
           <div className="flex flex-col gap-2">
             {isVercel && (
               <a
@@ -427,7 +435,7 @@ export default function AdminPage() {
               className="inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-semibold"
               style={{ background: "#0a0a0a", color: "hsl(43,85%,52%)" }}
             >
-              Open Luxe RM
+              Open CRM Login
             </a>
 
             <div className="rounded-xl border border-border p-4 text-left space-y-2">

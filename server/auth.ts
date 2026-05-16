@@ -422,6 +422,8 @@ export async function getSharedAuthDiagnostics(req: Request) {
     matchedCookieName,
     hasSessionCookie: Boolean(rawCookieValue),
     hasAuthUser: Boolean(req.authUser),
+    staleCookieLikely: false,
+    actionHint: null,
     authUser: req.authUser
       ? {
           id: req.authUser.id,
@@ -445,13 +447,23 @@ export async function getSharedAuthDiagnostics(req: Request) {
     ? (secrets.map((secret) => unsignExpressSessionCookie(rawCookieValue, secret)).find(Boolean) ?? null)
     : null;
   const effectiveSid = unsignedSid ?? (!rawCookieValue.startsWith("s:") ? rawCookieValue : null);
+  const signedCookie = rawCookieValue.startsWith("s:");
+  const signatureValid = Boolean(unsignedSid);
+  const staleCookieLikely = Boolean(secretSet && signedCookie && !signatureValid);
+  const actionHint = staleCookieLikely
+    ? "Your shared admin session cookie looks stale (signed with an old secret). Clear cookies for this domain (especially connect.sid) and sign in again in the CRM, then refresh this page."
+    : null;
 
   response.expressSession = {
     secretSet,
-    signedCookie: rawCookieValue.startsWith("s:"),
-    signatureValid: Boolean(unsignedSid),
+    signedCookie,
+    signatureValid,
     effectiveSidPresent: Boolean(effectiveSid),
+    staleCookieLikely,
+    actionHint,
   };
+  response.staleCookieLikely = staleCookieLikely;
+  response.actionHint = actionHint;
 
   if (!effectiveSid) {
     return response;

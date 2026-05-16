@@ -1,0 +1,6 @@
+- [x] `GET /api/admin/auth/diagnostics` remains production-safe (no secrets, no raw cookies)
+- [x] Diagnostics includes `staleCookieLikely` and `actionHint` for express-session mode when signature validation fails
+- [x] Admin page shows a clear “re-login to CRM” message when stale cookie is likely
+- [x] Admin page provides a CRM login link/button without requesting credentials
+- [x] `npm run check` passes
+- [x] `npm run build` passes
