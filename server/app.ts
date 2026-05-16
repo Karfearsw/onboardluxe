@@ -2,7 +2,8 @@ import express, { type Express, type NextFunction, type Request, type Response }
 import { createServer } from "http";
 import { attachSharedAuthUser } from "./auth.js";
 import { attachAgentUser } from "./agent-auth.js";
-import { validateEnvOrThrow } from "./env.js";
+import { ensureDatabase } from "./db.js";
+import { runtimeIsStrict, validateEnvOrThrow } from "./env.js";
 import { registerRoutes } from "./routes.js";
 import { serveStatic } from "./static.js";
 import path from "path";
@@ -26,6 +27,9 @@ export function log(message: string, source = "express") {
 
 export async function createApp() {
   validateEnvOrThrow();
+  if (runtimeIsStrict(process.env)) {
+    await ensureDatabase();
+  }
   const app: Express = express();
   const httpServer = createServer(app);
 

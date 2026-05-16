@@ -11,6 +11,10 @@ Server runtimes resolve the database URL in this order:
 
 Resolution happens at runtime (not at module import), and the server will fail fast in strict environments if no URL is present: [env.ts](file:///workspace/server/env.ts).
 
+### SSL connection string guidance (Neon)
+- Prefer `sslmode=verify-full` when you can validate the server certificate properly.
+- For forward compatibility with upcoming `pg` / `pg-connection-string` semantics changes, use `uselibpqcompat=true&sslmode=require`.
+
 ## Environments
 
 ### Production

@@ -124,6 +124,11 @@ export async function attachAgentUser(req: Request, _res: Response, next: NextFu
     req.agentUser = { agentId: row.agent_id, sessionToken: row.token };
     return next();
   } catch (error) {
+    const code = (error as { code?: unknown } | null)?.code;
+    if (code === "42P01") {
+      req.agentUser = null;
+      return next();
+    }
     return next(error);
   }
 }
@@ -154,4 +159,3 @@ export function requireAgentOrAdmin(paramName = "id") {
     return next();
   };
 }
-
