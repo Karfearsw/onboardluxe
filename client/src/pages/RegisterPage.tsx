@@ -10,6 +10,27 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 import { Link } from "wouter";
 import luxeLogo from "@assets/luxe-logo.jpg";
 
+function parseApiErrorPayload(error: unknown): { status?: number; message?: string; actionHint?: string } | null {
+  const raw = error && typeof error === "object" && "message" in error ? (error as any).message : null;
+  if (typeof raw !== "string") return null;
+  const match = raw.match(/^(\d{3})\s*:\s*([\s\S]*)$/);
+  const status = match ? Number(match[1]) : undefined;
+  const body = match ? match[2] : raw;
+  const trimmed = body.trim();
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return { status, message: trimmed };
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (!parsed || typeof parsed !== "object") return { status, message: trimmed };
+    return {
+      status,
+      message: typeof (parsed as any).message === "string" ? (parsed as any).message : undefined,
+      actionHint: typeof (parsed as any).actionHint === "string" ? (parsed as any).actionHint : undefined,
+    };
+  } catch {
+    return { status, message: trimmed };
+  }
+}
+
 const OceanLuxeLogo = () => (
   <div className="flex items-center gap-2.5" aria-label="Ocean Luxe Estate LLC">
     <img src={luxeLogo} alt="Ocean Luxe shell logo" className="h-8 w-8 rounded-md object-cover" />
@@ -39,7 +60,10 @@ export default function RegisterPage() {
       navigate("/agent");
     },
     onError: (e: any) => {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      const payload = parseApiErrorPayload(e);
+      const title = payload?.status === 403 ? "Signup restricted" : "Error";
+      const description = payload?.actionHint || payload?.message || e.message || "Request failed.";
+      toast({ title, description, variant: "destructive" });
     },
   });
 

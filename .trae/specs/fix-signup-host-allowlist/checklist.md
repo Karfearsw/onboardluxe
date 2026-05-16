@@ -1,0 +1,6 @@
+- [x] `SIGNUP_ALLOWED_HOSTS` accepts hostnames and full URLs and matches correctly in production
+- [x] Wildcard patterns `.oceanluxe.org` and `*.oceanluxe.org` work as specified
+- [x] `POST /api/agents` returns 403 with `actionHint` when signup is blocked (no sensitive leakage)
+- [x] Register page displays `actionHint` when present
+- [x] `npm run check` passes
+- [x] `npm run build` passes

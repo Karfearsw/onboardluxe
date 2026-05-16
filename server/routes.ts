@@ -13,8 +13,55 @@ import { z } from "zod";
 
 const debugEndpointsEnabled = process.env.DEBUG_ENDPOINTS === "1" || process.env.NODE_ENV !== "production";
 
-function normalizeHost(value: string) {
-  return value.trim().toLowerCase().replace(/:\d+$/, "");
+function normalizeHostname(value: string) {
+  return value.trim().toLowerCase().replace(/:\d+$/, "").replace(/\.$/, "");
+}
+
+function parseHostLike(value: string) {
+  const raw = value.trim();
+  if (!raw) return "";
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(raw)) {
+    try {
+      return normalizeHostname(new URL(raw).hostname);
+    } catch {
+      return "";
+    }
+  }
+  if (/[/?#]/.test(raw)) {
+    try {
+      return normalizeHostname(new URL(`https://${raw}`).hostname);
+    } catch {
+      return "";
+    }
+  }
+  return normalizeHostname(raw);
+}
+
+function normalizeAllowlistPattern(value: string) {
+  const raw = value.trim().toLowerCase();
+  if (!raw) return "";
+  if (raw.startsWith("*.")) {
+    const root = normalizeHostname(raw.slice(2));
+    return root ? `*.${root}` : "";
+  }
+  if (raw.startsWith(".")) {
+    const root = normalizeHostname(raw.slice(1));
+    return root ? `.${root}` : "";
+  }
+  return parseHostLike(raw);
+}
+
+function hostMatchesPattern(host: string, pattern: string) {
+  if (!host || !pattern) return false;
+  if (pattern.startsWith("*.")) {
+    const root = pattern.slice(2);
+    return host !== root && host.endsWith(`.${root}`);
+  }
+  if (pattern.startsWith(".")) {
+    const root = pattern.slice(1);
+    return host === root || host.endsWith(`.${root}`);
+  }
+  return host === pattern;
 }
 
 function getRequestHost(req: { headers: Record<string, unknown> }) {
@@ -24,7 +71,7 @@ function getRequestHost(req: { headers: Record<string, unknown> }) {
     : typeof req.headers.host === "string"
       ? req.headers.host
       : "";
-  return normalizeHost(raw);
+  return parseHostLike(raw);
 }
 
 function signupIsAllowed(req: { headers: Record<string, unknown> }) {
@@ -34,10 +81,10 @@ function signupIsAllowed(req: { headers: Record<string, unknown> }) {
   const host = getRequestHost(req);
   const allowed = (process.env.SIGNUP_ALLOWED_HOSTS || "")
     .split(",")
-    .map((value) => normalizeHost(value))
+    .map((value) => normalizeAllowlistPattern(value))
     .filter(Boolean);
   if (!allowed.length) return false;
-  return allowed.includes(host);
+  return allowed.some((pattern) => hostMatchesPattern(host, pattern));
 }
 
 const agentUpdateSchema = insertAgentSchema.partial();
@@ -298,6 +345,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!signupIsAllowed(req)) {
       return res.status(403).json({
         message: "Signup is disabled on this deployment.",
+        actionHint: "Open signup on an approved Ocean Luxe domain (e.g. https://career.oceanluxe.org) or ask an admin to add this host to the signup allowlist for this deployment.",
         host: getRequestHost(req),
       });
     }
