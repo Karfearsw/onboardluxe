@@ -234,8 +234,8 @@ function extractActiveOrganizationIdFromSession(session: any) {
 }
 
 async function findAuthUserFromExpressSessionCookie(rawCookieValue: string): Promise<SharedAuthUser | null> {
-  const secret = process.env.SESSION_SECRET?.trim();
-  const sid = secret ? unsignExpressSessionCookie(rawCookieValue, secret) : null;
+  const secrets = (process.env.SESSION_SECRET ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  const sid = secrets.length ? secrets.reduce((found, secret) => found ?? unsignExpressSessionCookie(rawCookieValue, secret), null) : null;
   const effectiveSid = sid ?? (!rawCookieValue.startsWith("s:") ? rawCookieValue : null);
 
   if (!effectiveSid) {
@@ -430,8 +430,8 @@ export async function getSharedAuthDiagnostics(req: Request) {
     return response;
   }
 
-  const secretSet = Boolean(process.env.SESSION_SECRET?.trim());
-  const unsignedSid = secretSet ? unsignExpressSessionCookie(rawCookieValue, process.env.SESSION_SECRET!.trim()) : null;
+  const diagSecrets = (process.env.SESSION_SECRET ?? "").split(",").map((s) => s.trim()).filter(Boolean); const secretSet = diagSecrets.length > 0;
+  const unsignedSid = secretSet ? diagSecrets.reduce((found, secret) => found ?? unsignExpressSessionCookie(rawCookieValue, secret), null) : null;
   const effectiveSid = unsignedSid ?? (!rawCookieValue.startsWith("s:") ? rawCookieValue : null);
 
   response.expressSession = {
