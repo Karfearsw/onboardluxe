@@ -1,10 +1,11 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { db, ensureDatabase } from "./db.js";
-import { agents, onboardingTasks, documents, icaSignatures, trainingProgress } from "../shared/schema.js";
+import { agents, onboardingTasks, documents, emailRequests, icaSignatures, trainingProgress } from "../shared/schema.js";
 import type {
   Agent, InsertAgent,
   OnboardingTask, InsertOnboardingTask,
   Document, InsertDocument,
+  EmailRequest, InsertEmailRequest,
   IcaSignature, InsertIcaSignature,
   TrainingProgress, InsertTrainingProgress,
 } from "../shared/schema.js";
@@ -36,6 +37,12 @@ export interface IStorage {
   getTrainingProgress(agentId: number): Promise<TrainingProgress[]>;
   upsertTrainingProgress(agentId: number, moduleKey: string): Promise<TrainingProgress>;
   initTrainingModules(agentId: number): Promise<void>;
+
+  getEmailRequest(id: number): Promise<EmailRequest | undefined>;
+  getEmailRequestByRequestedEmail(requestedEmail: string): Promise<EmailRequest | undefined>;
+  getEmailRequests(params?: { agentId?: number; status?: string; limit?: number }): Promise<EmailRequest[]>;
+  createEmailRequest(data: InsertEmailRequest): Promise<EmailRequest>;
+  updateEmailRequest(id: number, data: Partial<InsertEmailRequest>): Promise<EmailRequest | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -181,6 +188,61 @@ export class DatabaseStorage implements IStorage {
       .values({ agentId, moduleKey, moduleName: moduleKey, completed: true, completedAt: new Date().toISOString() })
       .returning();
     return progress;
+  }
+
+  async getEmailRequest(id: number) {
+    await ensureDatabase();
+    const [request] = await db.select().from(emailRequests).where(eq(emailRequests.id, id));
+    return request;
+  }
+
+  async getEmailRequestByRequestedEmail(requestedEmail: string) {
+    await ensureDatabase();
+    const [request] = await db
+      .select()
+      .from(emailRequests)
+      .where(eq(emailRequests.requestedEmail, requestedEmail));
+    return request;
+  }
+
+  async getEmailRequests(params?: { agentId?: number; status?: string; limit?: number }) {
+    await ensureDatabase();
+    const agentId = params?.agentId;
+    const status = params?.status;
+    const limit = params?.limit;
+
+    const filters = [
+      typeof agentId === "number" ? eq(emailRequests.agentId, agentId) : null,
+      typeof status === "string" && status ? eq(emailRequests.status, status) : null,
+    ].filter(Boolean) as any[];
+
+    const query = filters.length
+      ? db.select().from(emailRequests).where(filters.length > 1 ? and(...filters) : filters[0])
+      : db.select().from(emailRequests);
+
+    const ordered = query.orderBy(desc(emailRequests.createdAt));
+    return typeof limit === "number" && limit > 0 ? ordered.limit(limit) : ordered;
+  }
+
+  async createEmailRequest(data: InsertEmailRequest) {
+    await ensureDatabase();
+    const now = new Date().toISOString();
+    const [request] = await db
+      .insert(emailRequests)
+      .values({ ...data, createdAt: data.createdAt || now, updatedAt: data.updatedAt || now })
+      .returning();
+    return request;
+  }
+
+  async updateEmailRequest(id: number, data: Partial<InsertEmailRequest>) {
+    await ensureDatabase();
+    const now = new Date().toISOString();
+    const [request] = await db
+      .update(emailRequests)
+      .set({ ...data, updatedAt: data.updatedAt || now })
+      .where(eq(emailRequests.id, id))
+      .returning();
+    return request;
   }
 }
 

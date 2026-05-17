@@ -4,6 +4,7 @@ import { getSharedAuthDiagnostics, requireSharedAdmin, requireSharedAuth } from 
 import { clearAgentSessionCookie, createAgentSession, deleteAgentSession, requireAgentAuth, requireAgentOrAdmin, setAgentSessionCookie } from "./agent-auth.js";
 import { pool } from "./db.js";
 import { sendDiscordWebhook } from "./discord.js";
+import { decryptTempPassword, encryptTempPassword, generateTempPassword } from "./email-provisioning.js";
 import { clearHrAdminCookie, createHrAdminToken, hasHrAdminCookie, setHrAdminCookie, verifyHrAdminAccessCode } from "./hr-admin-access.js";
 import { listStatusEvents, logStatusEvent } from "./status-events.js";
 import { storage } from "./storage.js";
@@ -103,6 +104,49 @@ const payoutSchema = z.object({
 const pipelineStageSchema = z.enum(PIPELINE_STAGES);
 const pipelineStageUpdateSchema = z.object({ stage: pipelineStageSchema });
 const hrAdminLoginSchema = z.object({ code: z.string().trim().min(1) });
+const emailRequestListQuerySchema = z.object({
+  agentId: z.string().trim().optional(),
+  status: z.string().trim().optional(),
+  limit: z.string().trim().optional(),
+});
+const emailRequestUpdateSchema = z.object({
+  requestedEmail: z.string().trim().optional(),
+  status: z.enum(["requested", "created", "rejected"]).optional(),
+  notes: z.string().trim().optional(),
+  tempPassword: z.string().trim().min(8).optional(),
+  generateTempPassword: z.boolean().optional(),
+});
+const emailRequestSchema = z.object({ localPart: z.string().trim().min(1).max(64) });
+
+function serializeEmailRequest(request: any) {
+  if (!request) return null;
+  const {
+    id,
+    agentId,
+    requestedEmail,
+    status,
+    tempPasswordCreatedAt,
+    tempPasswordRevealedAt,
+    createdAt,
+    updatedAt,
+    notes,
+  } = request;
+  return { id, agentId, requestedEmail, status, tempPasswordCreatedAt, tempPasswordRevealedAt, createdAt, updatedAt, notes };
+}
+
+function normalizeEmailLocalPart(value: string) {
+  const raw = value.trim().toLowerCase();
+  const cleaned = raw.replace(/[^a-z0-9._-]/g, "");
+  const normalized = cleaned.replace(/\.+/g, ".").replace(/^-+/, "").replace(/-+$/, "").replace(/^_+/, "").replace(/_+$/, "");
+  return normalized;
+}
+
+function validateEmailLocalPart(value: string) {
+  if (!/^[a-z][a-z0-9._-]{2,31}$/.test(value)) return "Use 3-32 characters: letters, numbers, dot, underscore, hyphen.";
+  if (value.includes("..")) return "Email alias cannot contain consecutive dots.";
+  if (value.startsWith(".") || value.endsWith(".")) return "Email alias cannot start or end with a dot.";
+  return null;
+}
 
 function validatePayoutDetails(payoutMethodType: string, payoutDetails: string) {
   const value = payoutDetails.trim();
@@ -329,6 +373,152 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(summary);
   });
 
+  app.get("/api/agent/email-request", requireAgentAuth, async (req, res) => {
+    const agentId = req.agentUser!.agentId;
+    const [request] = await storage.getEmailRequests({ agentId, limit: 1 });
+    res.json(serializeEmailRequest(request));
+  });
+
+  app.post("/api/agent/email-request", requireAgentAuth, async (req, res) => {
+    const parsed = emailRequestSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid email request payload", issues: parsed.error.issues });
+    }
+
+    const agentId = req.agentUser!.agentId;
+    const agent = await storage.getAgent(agentId);
+    if (!agent) return res.status(404).json({ message: "Agent not found" });
+    if (!agent.onboardingComplete) {
+      return res.status(400).json({ message: "Complete onboarding before requesting an Ocean Luxe email." });
+    }
+
+    const localPart = normalizeEmailLocalPart(parsed.data.localPart);
+    const validationError = validateEmailLocalPart(localPart);
+    if (validationError) return res.status(400).json({ message: validationError });
+
+    const requestedEmail = `${localPart}@oceanluxe.org`;
+    const existingByEmail = await storage.getEmailRequestByRequestedEmail(requestedEmail);
+    if (existingByEmail && existingByEmail.agentId !== agentId) {
+      return res.status(409).json({ message: "This email alias is already requested.", requestedEmail });
+    }
+
+    const existing = (await storage.getEmailRequests({ agentId, limit: 1 }))[0];
+    const tempPassword = generateTempPassword();
+    const ciphertext = encryptTempPassword(tempPassword);
+    const now = new Date().toISOString();
+
+    const request = existing
+      ? await storage.updateEmailRequest(existing.id, {
+        requestedEmail,
+        status: "requested",
+        tempPasswordCiphertext: ciphertext,
+        tempPasswordCreatedAt: now,
+        tempPasswordRevealedAt: "",
+        notes: "",
+        updatedAt: now,
+      })
+      : await storage.createEmailRequest({
+        agentId,
+        requestedEmail,
+        status: "requested",
+        tempPasswordCiphertext: ciphertext,
+        tempPasswordCreatedAt: now,
+        tempPasswordRevealedAt: "",
+        notes: "",
+        createdAt: now,
+        updatedAt: now,
+      });
+
+    await logStatusEvent({
+      agentId,
+      eventType: "agent.email_requested",
+      actorType: "agent",
+      actorId: String(agentId),
+      metadata: { requestedEmail },
+    });
+
+    void sendDiscordWebhook("agent.email_requested", {
+      agentId,
+      requestedEmail,
+      emailRequestId: request.id,
+      timestamp: now,
+    }).catch((error) => {
+      console.error("Discord webhook failed (agent.email_requested):", error);
+    });
+
+    res.status(existing ? 200 : 201).json({ request: serializeEmailRequest(request), tempPassword });
+  });
+
+  app.post("/api/agents/:id/ocean-email-request", requireAgentOrAdmin("id"), async (req, res) => {
+    const parsed = emailRequestSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid email request payload", issues: parsed.error.issues });
+    }
+
+    const agentId = Number(String(req.params.id));
+    const agent = await storage.getAgent(agentId);
+    if (!agent) return res.status(404).json({ message: "Agent not found" });
+    if (!agent.onboardingComplete) {
+      return res.status(400).json({ message: "Complete onboarding before requesting an Ocean Luxe email." });
+    }
+
+    const localPart = normalizeEmailLocalPart(parsed.data.localPart);
+    const validationError = validateEmailLocalPart(localPart);
+    if (validationError) return res.status(400).json({ message: validationError });
+
+    const requestedEmail = `${localPart}@oceanluxe.org`;
+    const existingByEmail = await storage.getEmailRequestByRequestedEmail(requestedEmail);
+    if (existingByEmail && existingByEmail.agentId !== agentId) {
+      return res.status(409).json({ message: "This email alias is already requested.", requestedEmail });
+    }
+
+    const existing = (await storage.getEmailRequests({ agentId, limit: 1 }))[0];
+    const tempPassword = generateTempPassword();
+    const ciphertext = encryptTempPassword(tempPassword);
+    const now = new Date().toISOString();
+
+    const request = existing
+      ? await storage.updateEmailRequest(existing.id, {
+        requestedEmail,
+        status: "requested",
+        tempPasswordCiphertext: ciphertext,
+        tempPasswordCreatedAt: now,
+        tempPasswordRevealedAt: "",
+        notes: "",
+        updatedAt: now,
+      })
+      : await storage.createEmailRequest({
+        agentId,
+        requestedEmail,
+        status: "requested",
+        tempPasswordCiphertext: ciphertext,
+        tempPasswordCreatedAt: now,
+        tempPasswordRevealedAt: "",
+        notes: "",
+        createdAt: now,
+        updatedAt: now,
+      });
+
+    await logStatusEvent({
+      agentId,
+      eventType: "agent.email_requested",
+      actorType: req.authUser ? "admin" : "agent",
+      actorId: String(req.authUser?.id ?? agentId),
+      metadata: { requestedEmail },
+    });
+
+    void sendDiscordWebhook("agent.email_requested", {
+      agentId,
+      requestedEmail,
+      emailRequestId: request.id,
+      timestamp: now,
+    }).catch((error) => {
+      console.error("Discord webhook failed (agent.email_requested):", error);
+    });
+
+    res.status(existing ? 200 : 201).json({ request: serializeEmailRequest(request), tempPassword });
+  });
+
   // ── Agents ────────────────────────────────────────────────────────────────
   app.get("/api/agents", requireSharedAdmin, async (_req, res) => {
     const all = await storage.getAllAgents();
@@ -432,6 +622,143 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ── Admin ─────────────────────────────────────────────────────────────────
   app.get("/api/admin/me", requireSharedAuth, async (req, res) => {
     res.json(req.authUser);
+  });
+
+  app.get("/api/admin/email-requests", requireSharedAdmin, async (req, res) => {
+    const parsed = emailRequestListQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid query", issues: parsed.error.issues });
+    }
+
+    const agentIdRaw = (parsed.data.agentId || "").trim();
+    const agentIdValue = agentIdRaw ? Number(agentIdRaw) : 0;
+    if (agentIdRaw && (!Number.isFinite(agentIdValue) || agentIdValue <= 0)) {
+      return res.status(400).json({ message: "Invalid agentId" });
+    }
+    const agentId = agentIdRaw ? agentIdValue : undefined;
+
+    const limit = parsed.data.limit ? Number(parsed.data.limit) : undefined;
+    const safeLimit = typeof limit === "number" && Number.isFinite(limit) && limit > 0 ? Math.min(Math.floor(limit), 250) : undefined;
+    const requests = await storage.getEmailRequests({
+      agentId,
+      status: parsed.data.status || undefined,
+      limit: safeLimit,
+    });
+
+    res.json(requests.map((request) => ({
+      ...serializeEmailRequest(request),
+      hasTempPassword: Boolean((request?.tempPasswordCiphertext || "").trim()),
+    })));
+  });
+
+  async function handleEmailRequestReveal(req: any, res: any) {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ message: "Invalid request id" });
+    const request = await storage.getEmailRequest(id);
+    if (!request) return res.status(404).json({ message: "Email request not found" });
+    if (!(request.tempPasswordCiphertext || "").trim()) {
+      return res.status(400).json({ message: "Temp password not available." });
+    }
+
+    const tempPassword = decryptTempPassword(request.tempPasswordCiphertext);
+    const now = new Date().toISOString();
+    if (!(request.tempPasswordRevealedAt || "").trim()) {
+      await storage.updateEmailRequest(request.id, { tempPasswordRevealedAt: now, updatedAt: now });
+      await logStatusEvent({
+        agentId: request.agentId,
+        eventType: "email.temp_password_revealed",
+        actorType: "admin",
+        actorId: String(req.authUser?.id ?? ""),
+        metadata: { requestedEmail: request.requestedEmail, emailRequestId: request.id },
+      });
+    }
+
+    return res.json({ tempPassword });
+  }
+
+  app.get("/api/admin/email-requests/:id/reveal", requireSharedAdmin, handleEmailRequestReveal);
+  app.post("/api/admin/email-requests/:id/reveal", requireSharedAdmin, handleEmailRequestReveal);
+
+  app.patch("/api/admin/email-requests/:id", requireSharedAdmin, async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ message: "Invalid request id" });
+
+    const parsed = emailRequestUpdateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid update payload", issues: parsed.error.issues });
+    }
+
+    const request = await storage.getEmailRequest(id);
+    if (!request) return res.status(404).json({ message: "Email request not found" });
+
+    const requestedEmailRaw = (parsed.data.requestedEmail || "").trim();
+    const requestedEmail = requestedEmailRaw ? requestedEmailRaw.toLowerCase() : "";
+    if (requestedEmail) {
+      const ok = z.string().email().safeParse(requestedEmail).success;
+      if (!ok) return res.status(400).json({ message: "Invalid requested email" });
+      const existing = await storage.getEmailRequestByRequestedEmail(requestedEmail);
+      if (existing && existing.id !== request.id) {
+        return res.status(409).json({ message: "This email alias is already requested.", requestedEmail });
+      }
+    }
+
+    const now = new Date().toISOString();
+    const suppliedTempPassword = (parsed.data.tempPassword || "").trim();
+    const shouldGenerate = parsed.data.generateTempPassword === true && !suppliedTempPassword;
+    const nextTempPassword = suppliedTempPassword ? suppliedTempPassword : shouldGenerate ? generateTempPassword() : "";
+
+    try {
+      const updated = await storage.updateEmailRequest(id, {
+        requestedEmail: requestedEmail ? requestedEmail : undefined,
+        status: parsed.data.status ?? undefined,
+        notes: typeof parsed.data.notes === "string" ? parsed.data.notes : undefined,
+        tempPasswordCiphertext: nextTempPassword ? encryptTempPassword(nextTempPassword) : undefined,
+        tempPasswordCreatedAt: nextTempPassword ? now : undefined,
+        tempPasswordRevealedAt: nextTempPassword ? "" : undefined,
+        updatedAt: now,
+      });
+
+      res.json({
+        ...serializeEmailRequest(updated),
+        hasTempPassword: Boolean((updated?.tempPasswordCiphertext || "").trim()),
+      });
+    } catch (e: any) {
+      const code = (e as { code?: unknown } | null)?.code;
+      if (code === "23505") {
+        return res.status(409).json({ message: "This email alias is already requested.", requestedEmail });
+      }
+      const error = e instanceof Error ? e : new Error(String(e));
+      return res.status(500).json({ message: error.message || "Internal Server Error" });
+    }
+  });
+
+  app.patch("/api/admin/email-requests/:id/status", requireSharedAdmin, async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ message: "Invalid request id" });
+    const schema = z.object({ status: z.enum(["requested", "created", "rejected"]), notes: z.string().optional() });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid status payload", issues: parsed.error.issues });
+    }
+    const request = await storage.getEmailRequest(id);
+    if (!request) return res.status(404).json({ message: "Email request not found" });
+    const now = new Date().toISOString();
+    const updated = await storage.updateEmailRequest(id, {
+      status: parsed.data.status,
+      notes: (parsed.data.notes || request.notes || "").trim(),
+      updatedAt: now,
+    });
+    await logStatusEvent({
+      agentId: request.agentId,
+      eventType: parsed.data.status === "created" ? "email.created" : parsed.data.status === "rejected" ? "email.rejected" : "email.requested",
+      actorType: "admin",
+      actorId: String(req.authUser?.id ?? ""),
+      metadata: { requestedEmail: request.requestedEmail, emailRequestId: request.id },
+    });
+    res.json({
+      ...serializeEmailRequest(updated),
+      hasTempPassword: Boolean((updated?.tempPasswordCiphertext || "").trim()),
+    });
   });
 
   app.get("/api/admin/agents/:id", requireSharedAdmin, async (req, res) => {

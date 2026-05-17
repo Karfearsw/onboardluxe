@@ -48,13 +48,29 @@ export async function createApp() {
   app.use((req, res, next) => {
     const start = Date.now();
     const path = req.path;
-    let capturedJsonResponse: Record<string, any> | undefined = undefined;
+    let capturedJsonResponse: any | undefined = undefined;
 
-    const originalResJson = res.json;
-    res.json = function (bodyJson, ...args) {
-      capturedJsonResponse = bodyJson;
-      return originalResJson.apply(res, [bodyJson, ...args]);
-    };
+    const captureResponseBody = !/^\/api\/admin\/email-requests\/\d+\/reveal$/.test(path);
+    if (captureResponseBody) {
+      const redact = (value: any): any => {
+        if (!value || typeof value !== "object") return value;
+        if (Array.isArray(value)) return value.map(redact);
+        const out: Record<string, any> = {};
+        for (const [key, entry] of Object.entries(value)) {
+          if (key === "tempPassword" || key === "tempPasswordCiphertext") {
+            out[key] = "[redacted]";
+            continue;
+          }
+          out[key] = redact(entry);
+        }
+        return out;
+      };
+      const originalResJson = res.json;
+      res.json = function (bodyJson, ...args) {
+        capturedJsonResponse = redact(bodyJson);
+        return originalResJson.apply(res, [bodyJson, ...args]);
+      };
+    }
 
     res.on("finish", () => {
       const duration = Date.now() - start;

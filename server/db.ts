@@ -90,6 +90,7 @@ async function assertSchemaReady() {
     "hr_training_progress",
     "hr_agent_sessions",
     "hr_status_events",
+    "hr_email_requests",
   ];
 
   const result = await pool.query<{ name: string; exists: boolean }>(

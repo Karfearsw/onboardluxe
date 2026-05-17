@@ -60,6 +60,8 @@ export function validateEnvOrThrow(env: NodeJS.ProcessEnv = process.env) {
     SIGNUP_ALLOWED_HOSTS: z.string().optional(),
 
     AUTO_APPLY_MIGRATIONS: z.string().optional(),
+
+    EMAIL_PROVISIONING_SECRET: z.string().optional(),
   });
 
   const parsed = schema.safeParse(env);

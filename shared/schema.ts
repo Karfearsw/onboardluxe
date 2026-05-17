@@ -149,3 +149,28 @@ export const statusEvents = pgTable(
 );
 
 export type StatusEvent = typeof statusEvents.$inferSelect;
+
+export const emailRequests = pgTable(
+  "hr_email_requests",
+  {
+    id: serial("id").primaryKey(),
+    agentId: integer("agent_id").notNull(),
+    requestedEmail: text("requested_email").notNull().unique(),
+    status: text("status").notNull().default("requested"),
+    tempPasswordCiphertext: text("temp_password_ciphertext").notNull().default(""),
+    tempPasswordCreatedAt: text("temp_password_created_at").notNull().default(""),
+    tempPasswordRevealedAt: text("temp_password_revealed_at").notNull().default(""),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+    notes: text("notes").notNull().default(""),
+  },
+  (t) => ({
+    agentIdx: index("hr_email_requests_agent_idx").on(t.agentId),
+    statusIdx: index("hr_email_requests_status_idx").on(t.status),
+    createdIdx: index("hr_email_requests_created_idx").on(t.createdAt),
+  }),
+);
+
+export const insertEmailRequestSchema = createInsertSchema(emailRequests).omit({ id: true });
+export type InsertEmailRequest = z.infer<typeof insertEmailRequestSchema>;
+export type EmailRequest = typeof emailRequests.$inferSelect;

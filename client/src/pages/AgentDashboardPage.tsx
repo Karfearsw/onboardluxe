@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Agent, OnboardingTask } from "@shared/schema";
@@ -45,6 +45,18 @@ type AgentStatusSummary = {
   events: StatusEvent[];
 };
 
+type EmailRequestSummary = {
+  id: number;
+  agentId: number;
+  requestedEmail: string;
+  status: string;
+  tempPasswordCreatedAt: string;
+  tempPasswordRevealedAt: string;
+  createdAt: string;
+  updatedAt: string;
+  notes: string;
+} | null;
+
 const STEPS = [
   { key: "profile", label: "Profile", n: 1 },
   { key: "ica", label: "Sign ICA", n: 2 },
@@ -84,10 +96,22 @@ function formatEventTime(value: string) {
   }
 }
 
+function suggestedEmailLocalPart(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const first = (parts[0] || "").replace(/[^a-zA-Z]/g, "");
+  const last = (parts[parts.length - 1] || "").replace(/[^a-zA-Z]/g, "");
+  const base = first && last && parts.length > 1
+    ? `${first[0] || ""}${last}`
+    : (first || last || "agent");
+  return base.toLowerCase().replace(/[^a-z0-9._-]/g, "");
+}
+
 export default function AgentDashboardPage() {
   const [, navigate] = useLocation();
   const qc = useQueryClient();
   const [loginForm, setLoginForm] = useState({ email: "", phoneLast4: "" });
+  const [emailLocalPart, setEmailLocalPart] = useState("");
+  const [tempPasswordOnce, setTempPasswordOnce] = useState("");
 
   const { data, isLoading, isError, error } = useQuery<{ agent: Agent; tasks: OnboardingTask[] }>({
     queryKey: ["/api/agent/me"],
@@ -123,6 +147,19 @@ export default function AgentDashboardPage() {
     retry: false,
   });
 
+  const { data: emailRequest } = useQuery<EmailRequestSummary>({
+    queryKey: ["/api/agent/email-request"],
+    queryFn: async () => {
+      const res = await fetch("/api/agent/email-request", { credentials: "include" });
+      if (!res.ok) {
+        throw new Error(`Failed to load email request: ${res.status}`);
+      }
+      return res.json();
+    },
+    enabled: !!agent && agent.onboardingComplete,
+    retry: false,
+  });
+
   const progress = useMemo(() => {
     const completed = tasks.filter((t) => t.status === "complete").length;
     const percent = tasks.length ? Math.round((completed / tasks.length) * 100) : 0;
@@ -153,6 +190,23 @@ export default function AgentDashboardPage() {
       await qc.invalidateQueries({ queryKey: ["/api/agent/status"] });
     },
   });
+
+  const { mutate: submitEmailRequest, isPending: isSubmittingEmailRequest } = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/agent/email-request", { localPart: emailLocalPart });
+      return res.json();
+    },
+    onSuccess: async (payload: any) => {
+      setTempPasswordOnce(String(payload?.tempPassword || ""));
+      await qc.invalidateQueries({ queryKey: ["/api/agent/email-request"] });
+    },
+  });
+
+  useEffect(() => {
+    if (!agent?.onboardingComplete) return;
+    if (emailRequest?.requestedEmail) return;
+    setEmailLocalPart((value) => value || suggestedEmailLocalPart(agent.name));
+  }, [agent, emailRequest]);
 
   if (isLoading) {
     return (
@@ -232,6 +286,9 @@ export default function AgentDashboardPage() {
   const resumeHref = `/onboarding/${agent.id}`;
   const pipelineStage = statusSummary?.pipelineStage || "Applicant";
   const recentEvents = statusSummary?.events || [];
+  const canRequestEmail = agent.onboardingComplete;
+  const requestedEmail = emailRequest?.requestedEmail || "";
+  const requestStatus = emailRequest?.status || "";
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -306,6 +363,62 @@ export default function AgentDashboardPage() {
           </div>
 
           <div className="space-y-4">
+            {canRequestEmail && (
+              <div className="bg-card border border-border rounded-xl p-5 space-y-4">
+                <div>
+                  <p className="text-xs uppercase tracking-widest text-muted-foreground">Ocean Luxe Email</p>
+                  <p className="text-sm text-muted-foreground mt-1">Request your Ocean Luxe inbox for agent operations.</p>
+                </div>
+
+                {requestedEmail ? (
+                  <div className="rounded-lg bg-muted/40 px-3 py-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold">{requestedEmail}</p>
+                      <span className="text-xs uppercase tracking-widest text-muted-foreground">{requestStatus}</span>
+                    </div>
+                    {requestStatus === "requested" ? (
+                      <p className="text-xs text-muted-foreground">Pending admin setup. Save your temp password if shown below.</p>
+                    ) : requestStatus === "created" ? (
+                      <p className="text-xs text-muted-foreground">Inbox created. Use your temp password from setup (or ask admin if needed).</p>
+                    ) : requestStatus === "rejected" ? (
+                      <p className="text-xs text-muted-foreground">Rejected. Edit the alias and submit a new request.</p>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {!requestedEmail || requestStatus === "rejected" ? (
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <Label>Email alias</Label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={emailLocalPart}
+                          onChange={(e) => setEmailLocalPart(e.target.value)}
+                          placeholder="bsmith"
+                        />
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">@oceanluxe.org</span>
+                      </div>
+                    </div>
+                    <Button
+                      className="w-full"
+                      onClick={() => submitEmailRequest()}
+                      disabled={!emailLocalPart.trim() || isSubmittingEmailRequest}
+                      style={{ background: "#0a0a0a", color: "hsl(43,85%,52%)" }}
+                    >
+                      Submit Email Request →
+                    </Button>
+                  </div>
+                ) : null}
+
+                {tempPasswordOnce ? (
+                  <div className="rounded-lg border border-border px-3 py-3 space-y-1">
+                    <p className="text-xs uppercase tracking-widest text-muted-foreground">Temp Password (shown once)</p>
+                    <p className="text-sm font-semibold">{tempPasswordOnce}</p>
+                  </div>
+                ) : null}
+              </div>
+            )}
+
             <div className="bg-card border border-border rounded-xl p-5 space-y-2">
               <p className="text-xs uppercase tracking-widest text-muted-foreground">Quick Links</p>
               <a href={resumeHref} className="text-sm font-semibold hover:underline" style={{ color: "hsl(43,85%,42%)" }}>

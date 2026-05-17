@@ -111,6 +111,18 @@ interface AgentStatusSummary {
   events: StatusEvent[];
 }
 
+interface EmailRequestSummary {
+  id: number;
+  agentId: number;
+  requestedEmail: string;
+  status: string;
+  tempPasswordCreatedAt: string;
+  tempPasswordRevealedAt: string;
+  createdAt: string;
+  updatedAt: string;
+  notes: string;
+}
+
 function formatEventTime(value: string) {
   try {
     return new Date(value).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -204,6 +216,7 @@ export default function AdminPage() {
   const [hrAccessError, setHrAccessError] = useState("");
   const [hrAccessLoading, setHrAccessLoading] = useState(false);
   const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null);
+  const [revealedPasswords, setRevealedPasswords] = useState<Record<number, string>>({});
   const [editForm, setEditForm] = useState({
     subscriptionStatus: "Trial",
     payoutMethodType: "",
@@ -277,6 +290,28 @@ export default function AdminPage() {
     queryKey: ["/api/admin/agents", selectedAgentId, "status"],
     queryFn: async () => (await apiRequest("GET", `/api/admin/agents/${selectedAgentId}/status`)).json(),
     enabled: !!currentAdmin && !!selectedAgentId,
+  });
+
+  const { data: emailRequests = [], isLoading: isLoadingEmailRequests } = useQuery<EmailRequestSummary[]>({
+    queryKey: ["/api/admin/email-requests"],
+    queryFn: async () => (await apiRequest("GET", "/api/admin/email-requests")).json(),
+    enabled: !!currentAdmin,
+  });
+
+  const { mutate: revealEmailPassword, isPending: isRevealingEmailPassword } = useMutation({
+    mutationFn: async (id: number) => (await apiRequest("POST", `/api/admin/email-requests/${id}/reveal`, {})).json(),
+    onSuccess: async (data: any, id: number) => {
+      setRevealedPasswords((current) => ({ ...current, [id]: String(data?.tempPassword || "") }));
+      await qc.invalidateQueries({ queryKey: ["/api/admin/email-requests"] });
+    },
+  });
+
+  const { mutate: updateEmailRequestStatus, isPending: isUpdatingEmailRequestStatus } = useMutation({
+    mutationFn: async ({ id, status }: { id: number; status: string }) =>
+      (await apiRequest("PATCH", `/api/admin/email-requests/${id}/status`, { status })).json(),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["/api/admin/email-requests"] });
+    },
   });
 
   const { mutate: activateAgent } = useMutation({
@@ -1026,6 +1061,105 @@ export default function AdminPage() {
               </div>
             )}
           </div>
+        </div>
+
+        <div className="bg-card border border-border rounded-xl overflow-hidden mt-6">
+          <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid hsl(var(--border))" }}>
+            <div>
+              <h2 className="font-semibold text-sm tracking-wide">Email Requests</h2>
+              <p className="text-xs text-muted-foreground mt-1">Provision Ocean Luxe inboxes and share temp passwords once</p>
+            </div>
+            <button
+              onClick={() => qc.invalidateQueries({ queryKey: ["/api/admin/email-requests"] })}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <RefreshCcw className="h-4 w-4" />
+            </button>
+          </div>
+
+          {isLoadingEmailRequests ? (
+            <div className="p-8 text-center text-muted-foreground text-sm">Loading email requests...</div>
+          ) : emailRequests.length === 0 ? (
+            <div className="p-8 text-center text-muted-foreground text-sm">No email requests yet.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr style={{ borderBottom: "1px solid hsl(var(--border))", background: "hsl(var(--muted))" }}>
+                    {["Agent", "Requested Email", "Status", "Created", "Actions"].map((h) => (
+                      <th key={h} className="text-left px-5 py-3 text-xs font-medium text-muted-foreground tracking-widest uppercase">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {emailRequests.map((request) => {
+                    const agent = agents.find((a) => a.id === request.agentId);
+                    const localReveal = revealedPasswords[request.id] || "";
+                    const revealedAt = (request.tempPasswordRevealedAt || "").trim();
+                    const canReveal = !revealedAt && request.status !== "rejected";
+                    const canResolve = request.status === "requested";
+
+                    return (
+                      <tr key={request.id} className="border-b border-border last:border-0">
+                        <td className="px-5 py-4">
+                          <div className="text-xs">
+                            <p className="font-medium">{agent?.name || `Agent #${request.agentId}`}</p>
+                            <p className="text-muted-foreground">{agent?.email || ""}</p>
+                          </div>
+                        </td>
+                        <td className="px-5 py-4">
+                          <div className="text-xs">
+                            <p className="font-medium">{request.requestedEmail}</p>
+                            {localReveal ? (
+                              <p className="text-muted-foreground mt-1">Temp password: <span className="font-semibold text-foreground">{localReveal}</span></p>
+                            ) : revealedAt ? (
+                              <p className="text-muted-foreground mt-1">Temp password already revealed</p>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td className="px-5 py-4">
+                          <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium capitalize">
+                            {request.status.replace("_", " ")}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4">
+                          <span className="text-xs text-muted-foreground">{formatDate(request.createdAt)}</span>
+                        </td>
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <button
+                              type="button"
+                              onClick={() => revealEmailPassword(request.id)}
+                              disabled={!canReveal || isRevealingEmailPassword}
+                              className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                            >
+                              Reveal once
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => updateEmailRequestStatus({ id: request.id, status: "created" })}
+                              disabled={!canResolve || isUpdatingEmailRequestStatus}
+                              className="rounded-md border border-emerald-200 px-3 py-1.5 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-50 disabled:opacity-50"
+                            >
+                              Mark created
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => updateEmailRequestStatus({ id: request.id, status: "rejected" })}
+                              disabled={!canResolve || isUpdatingEmailRequestStatus}
+                              className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 transition-colors hover:bg-red-50 disabled:opacity-50"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
     </div>
