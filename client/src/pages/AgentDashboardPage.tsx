@@ -3,6 +3,7 @@ import { Link, useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Agent, OnboardingTask } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -66,6 +67,27 @@ const STEPS = [
   { key: "training", label: "Training", n: 6 },
 ];
 
+function parseApiErrorPayload(error: unknown): { status?: number; message?: string; actionHint?: string } | null {
+  const raw = error && typeof error === "object" && "message" in error ? (error as any).message : null;
+  if (typeof raw !== "string") return null;
+  const match = raw.match(/^(\d{3})\s*:\s*([\s\S]*)$/);
+  const status = match ? Number(match[1]) : undefined;
+  const body = match ? match[2] : raw;
+  const trimmed = body.trim();
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return { status, message: trimmed };
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (!parsed || typeof parsed !== "object") return { status, message: trimmed };
+    return {
+      status,
+      message: typeof (parsed as any).message === "string" ? (parsed as any).message : undefined,
+      actionHint: typeof (parsed as any).actionHint === "string" ? (parsed as any).actionHint : undefined,
+    };
+  } catch {
+    return { status, message: trimmed };
+  }
+}
+
 function StepStatusIcon({ status }: { status: string }) {
   if (status === "complete") return <CheckCircle2 className="h-4 w-4 text-emerald-500" />;
   if (status === "in_progress") return <Clock className="h-4 w-4 text-amber-500" />;
@@ -109,9 +131,11 @@ function suggestedEmailLocalPart(name: string) {
 export default function AgentDashboardPage() {
   const [, navigate] = useLocation();
   const qc = useQueryClient();
-  const [loginForm, setLoginForm] = useState({ email: "", phoneLast4: "" });
+  const { toast } = useToast();
+  const [loginForm, setLoginForm] = useState({ phone: "", phoneLast4: "" });
   const [emailLocalPart, setEmailLocalPart] = useState("");
   const [tempPasswordOnce, setTempPasswordOnce] = useState("");
+  const [personalEmailDraft, setPersonalEmailDraft] = useState("");
 
   const { data, isLoading, isError, error } = useQuery<{ agent: Agent; tasks: OnboardingTask[] }>({
     queryKey: ["/api/agent/me"],
@@ -170,7 +194,7 @@ export default function AgentDashboardPage() {
   const { mutate: login, isPending: isLoggingIn } = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/agent/login", {
-        email: loginForm.email.trim().toLowerCase(),
+        phone: loginForm.phone.trim(),
         phoneLast4: loginForm.phoneLast4.trim(),
       });
       return res.json();
@@ -178,6 +202,14 @@ export default function AgentDashboardPage() {
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["/api/agent/me"] });
       await qc.invalidateQueries({ queryKey: ["/api/agent/status"] });
+    },
+    onError: (e: any) => {
+      const payload = parseApiErrorPayload(e);
+      toast({
+        title: "Sign-in failed",
+        description: payload?.actionHint || payload?.message || "Double-check your phone number and last 4 digits, then try again.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -207,6 +239,30 @@ export default function AgentDashboardPage() {
     if (emailRequest?.requestedEmail) return;
     setEmailLocalPart((value) => value || suggestedEmailLocalPart(agent.name));
   }, [agent, emailRequest]);
+
+  useEffect(() => {
+    if (!agent?.onboardingComplete) return;
+    setPersonalEmailDraft((agent.personalEmail || agent.email || "").trim());
+  }, [agent?.id, agent?.onboardingComplete]);
+
+  const { mutate: savePersonalEmail, isPending: isSavingPersonalEmail } = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/agent/personal-email", { personalEmail: personalEmailDraft.trim() });
+      return res.json();
+    },
+    onSuccess: async () => {
+      toast({ title: "Saved", description: "Your personal email has been updated." });
+      await qc.invalidateQueries({ queryKey: ["/api/agent/me"] });
+    },
+    onError: (e: any) => {
+      const payload = parseApiErrorPayload(e);
+      toast({
+        title: "Could not save email",
+        description: payload?.actionHint || payload?.message || "Please try again in a moment.",
+        variant: "destructive",
+      });
+    },
+  });
 
   if (isLoading) {
     return (
@@ -246,13 +302,13 @@ export default function AgentDashboardPage() {
             <div className="text-center space-y-2">
               <img src={luxeLogo} alt="Ocean Luxe" className="h-14 w-14 rounded-xl object-cover mx-auto" />
               <h1 className="text-2xl font-semibold" style={{ fontFamily: "'Cormorant Garamond', serif" }}>Agent Sign-In</h1>
-              <p className="text-sm text-muted-foreground">Enter your email and the last 4 digits of your phone number.</p>
+              <p className="text-sm text-muted-foreground">Enter your phone number, then confirm the last 4 digits.</p>
             </div>
 
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <Label>Email</Label>
-                <Input value={loginForm.email} onChange={(e) => setLoginForm((v) => ({ ...v, email: e.target.value }))} placeholder="you@example.com" />
+                <Label>Phone</Label>
+                <Input value={loginForm.phone} onChange={(e) => setLoginForm((v) => ({ ...v, phone: e.target.value }))} placeholder="(555) 000-0000" />
               </div>
               <div className="space-y-1.5">
                 <Label>Phone last 4</Label>
@@ -263,7 +319,7 @@ export default function AgentDashboardPage() {
                   placeholder="4521"
                 />
               </div>
-              <Button className="w-full" onClick={() => login()} disabled={!loginForm.email.trim() || loginForm.phoneLast4.trim().length !== 4 || isLoggingIn}>
+              <Button className="w-full" onClick={() => login()} disabled={!loginForm.phone.trim() || loginForm.phoneLast4.trim().length !== 4 || isLoggingIn}>
                 Sign In →
               </Button>
             </div>
@@ -317,7 +373,7 @@ export default function AgentDashboardPage() {
       <div className="flex-1 p-6 max-w-5xl mx-auto w-full">
         <div className="mb-6">
           <h1 className="text-2xl font-semibold" style={{ fontFamily: "'Cormorant Garamond', serif" }}>Agent Dashboard</h1>
-          <p className="text-sm text-muted-foreground mt-1.5">{agent.name} · {agent.email}</p>
+          <p className="text-sm text-muted-foreground mt-1.5">{agent.name}{(agent.personalEmail || agent.email) ? ` · ${agent.personalEmail || agent.email}` : ""}</p>
         </div>
 
         <div className="grid gap-4 lg:grid-cols-[1.2fr,0.8fr]">
@@ -363,6 +419,32 @@ export default function AgentDashboardPage() {
           </div>
 
           <div className="space-y-4">
+            {agent.onboardingComplete && (
+              <div className="bg-card border border-border rounded-xl p-5 space-y-3">
+                <div>
+                  <p className="text-xs uppercase tracking-widest text-muted-foreground">Personal Email (Optional)</p>
+                  <p className="text-sm text-muted-foreground mt-1">Used for receipts and account recovery. You can update this anytime.</p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Email</Label>
+                  <Input
+                    value={personalEmailDraft}
+                    onChange={(e) => setPersonalEmailDraft(e.target.value)}
+                    placeholder="you@example.com"
+                    type="email"
+                  />
+                </div>
+                <Button
+                  className="w-full"
+                  onClick={() => savePersonalEmail()}
+                  disabled={isSavingPersonalEmail}
+                  style={{ background: "#0a0a0a", color: "hsl(43,85%,52%)" }}
+                >
+                  Save Personal Email →
+                </Button>
+              </div>
+            )}
+
             {canRequestEmail && (
               <div className="bg-card border border-border rounded-xl p-5 space-y-4">
                 <div>

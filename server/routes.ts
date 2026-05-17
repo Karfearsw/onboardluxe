@@ -65,6 +65,10 @@ function hostMatchesPattern(host: string, pattern: string) {
   return host === pattern;
 }
 
+function normalizePhone(value: string) {
+  return value.replace(/\D/g, "");
+}
+
 function getRequestHost(req: { headers: Record<string, unknown> }) {
   const forwarded = req.headers["x-forwarded-host"];
   const raw = typeof forwarded === "string"
@@ -326,19 +330,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.post("/api/agent/login", async (req, res) => {
-    const schema = z.object({ email: z.string().email(), phoneLast4: z.string().trim().regex(/^\d{4}$/) });
+    const schema = z.object({ phone: z.string().trim().min(1), phoneLast4: z.string().trim().regex(/^\d{4}$/) });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: "Invalid login payload", issues: parsed.error.issues });
     }
 
-    const agent = await storage.getAgentByEmail(parsed.data.email.toLowerCase());
-    if (!agent) return res.status(401).json({ message: "Invalid credentials" });
+    const phoneNormalized = normalizePhone(parsed.data.phone);
+    if (phoneNormalized.length < 10) {
+      return res.status(400).json({ message: "Enter a valid phone number." });
+    }
 
-    const digits = String(agent.phone || "").replace(/\D/g, "");
-    const last4 = digits.slice(-4);
-    if (!last4 || last4 !== parsed.data.phoneLast4) {
-      return res.status(401).json({ message: "Invalid credentials" });
+    const agent = await storage.getAgentByPhoneNormalized(phoneNormalized);
+    const last4 = phoneNormalized.slice(-4);
+    if (!agent || !last4 || last4 !== parsed.data.phoneLast4) {
+      return res.status(401).json({ message: "Sign-in failed. Double-check your phone number and last 4 digits." });
     }
 
     const session = await createAgentSession(agent.id);
@@ -365,6 +371,47 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!agent) return res.status(404).json({ message: "Agent not found" });
     res.json({ agent, tasks });
   });
+
+  async function handleAgentPersonalEmail(req: any, res: any) {
+    const schema = z.object({ personalEmail: z.string().trim().optional(), email: z.string().trim().optional() });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid email payload", issues: parsed.error.issues });
+    }
+
+    const agentId = req.agentUser!.agentId;
+    const agent = await storage.getAgent(agentId);
+    if (!agent) return res.status(404).json({ message: "Agent not found" });
+    if (!agent.onboardingComplete) {
+      return res.status(400).json({ message: "Finish onboarding before adding a personal email." });
+    }
+
+    const raw = (parsed.data.personalEmail ?? parsed.data.email ?? "").trim();
+    const normalized = raw ? raw.toLowerCase() : "";
+    if (normalized) {
+      const ok = z.string().email().safeParse(normalized).success;
+      if (!ok) return res.status(400).json({ message: "Enter a valid email address." });
+    }
+
+    const previous = String(agent.personalEmail || "");
+    const updated = await storage.updateAgent(agentId, { personalEmail: normalized || null });
+    if (!updated) return res.status(404).json({ message: "Agent not found" });
+
+    await logStatusEvent({
+      agentId,
+      eventType: "agent.personal_email_updated",
+      actorType: "agent",
+      actorId: String(agentId),
+      oldValue: previous,
+      newValue: normalized,
+      metadata: { personalEmail: normalized || "" },
+    });
+
+    res.json({ ok: true, agent: updated });
+  }
+
+  app.post("/api/agent/personal-email", requireAgentAuth, handleAgentPersonalEmail);
+  app.patch("/api/agent/personal-email", requireAgentAuth, handleAgentPersonalEmail);
 
   app.get("/api/agent/status", requireAgentAuth, async (req, res) => {
     const agentId = req.agentUser!.agentId;
@@ -541,8 +588,29 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
 
     try {
+      const schema = z.object({
+        name: z.string().trim().min(1),
+        phone: z.string().trim().min(1),
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Enter your name and phone number to continue.", issues: parsed.error.issues });
+      }
+
+      const phoneNormalized = normalizePhone(parsed.data.phone);
+      if (phoneNormalized.length < 10) {
+        return res.status(400).json({ message: "Enter a valid phone number." });
+      }
+
+      const existingByPhone = await storage.getAgentByPhoneNormalized(phoneNormalized);
+      if (existingByPhone) {
+        return res.status(409).json({ message: "An agent profile already exists for this phone number." });
+      }
+
       const data = insertAgentSchema.parse({
-        ...req.body,
+        name: parsed.data.name,
+        phone: parsed.data.phone,
+        phoneNormalized,
         startDate: new Date().toISOString(),
         subscriptionStatus: "Trial",
         crmPipelineStage: "Applicant",
@@ -571,7 +639,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         agentId: agent.id,
         eventType: "agent.created",
         actorType: "system",
-        metadata: { email: agent.email, name: agent.name },
+        metadata: { name: agent.name, phone: phoneNormalized },
       });
       void sendDiscordWebhook("agent.created", { agent }).catch((error) => {
         console.error("Discord webhook failed (agent.created):", error);
@@ -584,9 +652,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       const error = e instanceof Error ? e : new Error(String(e));
       const code = (e as { code?: unknown } | null)?.code;
+      const constraint = (e as { constraint?: unknown } | null)?.constraint;
 
       if (code === "23505") {
-        return res.status(409).json({ message: "An agent with this email already exists." });
+        if (typeof constraint === "string" && constraint.includes("phone_normalized")) {
+          return res.status(409).json({ message: "An agent profile already exists for this phone number." });
+        }
+        return res.status(409).json({ message: "This agent record already exists." });
       }
 
       console.error("Agent registration failed:", error);
@@ -600,6 +672,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       payload = agentUpdateSchema.parse(req.body);
     } catch (e: any) {
       return res.status(400).json({ message: e.message });
+    }
+
+    if (typeof payload.phone === "string" && typeof payload.phoneNormalized !== "string") {
+      const normalized = normalizePhone(payload.phone);
+      if (normalized.length >= 10) {
+        payload.phoneNormalized = normalized;
+      }
     }
 
     const agentId = Number(req.params.id);
@@ -742,6 +821,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     const request = await storage.getEmailRequest(id);
     if (!request) return res.status(404).json({ message: "Email request not found" });
+    const previousStatus = request.status;
     const now = new Date().toISOString();
     const updated = await storage.updateEmailRequest(id, {
       status: parsed.data.status,
@@ -750,11 +830,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
     await logStatusEvent({
       agentId: request.agentId,
-      eventType: parsed.data.status === "created" ? "email.created" : parsed.data.status === "rejected" ? "email.rejected" : "email.requested",
+      eventType: parsed.data.status === "created"
+        ? "agent.email_created"
+        : parsed.data.status === "rejected"
+          ? "agent.email_rejected"
+          : "agent.email_requested",
       actorType: "admin",
       actorId: String(req.authUser?.id ?? ""),
+      oldValue: previousStatus,
+      newValue: parsed.data.status,
       metadata: { requestedEmail: request.requestedEmail, emailRequestId: request.id },
     });
+    if (parsed.data.status === "created" && previousStatus !== "created") {
+      void sendDiscordWebhook("agent.email_created", {
+        agentId: request.agentId,
+        requestedEmail: request.requestedEmail,
+        emailRequestId: request.id,
+        timestamp: now,
+      }).catch((error) => {
+        console.error("Discord webhook failed (agent.email_created):", error);
+      });
+    }
     res.json({
       ...serializeEmailRequest(updated),
       hasTempPassword: Boolean((updated?.tempPasswordCiphertext || "").trim()),

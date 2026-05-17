@@ -374,7 +374,7 @@ export default function AdminPage() {
       const matchesQuery =
         !q ||
         agent.name.toLowerCase().includes(q) ||
-        agent.email.toLowerCase().includes(q) ||
+        (agent.personalEmail || agent.email || "").toLowerCase().includes(q) ||
         agent.phone.toLowerCase().includes(q) ||
         (agent.crmRecordId || "").toLowerCase().includes(q);
 
@@ -720,7 +720,7 @@ export default function AdminPage() {
                                 </div>
                                 <div>
                                   <p className="font-medium tracking-wide">{agent.name}</p>
-                                  <p className="text-xs text-muted-foreground">{agent.email}</p>
+                                  <p className="text-xs text-muted-foreground">{agent.personalEmail || agent.email || "—"}</p>
                                 </div>
                               </div>
                             </button>
@@ -800,7 +800,7 @@ export default function AdminPage() {
                     <h3 className="text-xl font-semibold" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
                       {selectedAgentDetails.agent.name}
                     </h3>
-                    <p className="text-sm text-muted-foreground">{selectedAgentDetails.agent.email} · {selectedAgentDetails.agent.phone}</p>
+                    <p className="text-sm text-muted-foreground">{selectedAgentDetails.agent.personalEmail || selectedAgentDetails.agent.email || "—"} · {selectedAgentDetails.agent.phone}</p>
                     <div className="flex items-center gap-2 mt-2">
                       <StatusBadge status={selectedAgentDetails.agent.subscriptionStatus} />
                       <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium">

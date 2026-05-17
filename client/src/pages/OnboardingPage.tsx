@@ -632,7 +632,7 @@ export default function OnboardingPage() {
             </div>
             <div className="min-w-0">
               <p className="font-semibold text-sm truncate">{agent.name}</p>
-              <p className="text-xs text-white/50 truncate">{agent.email}</p>
+              <p className="text-xs text-white/50 truncate">{agent.personalEmail || agent.email || agent.phone}</p>
             </div>
           </div>
 
@@ -725,7 +725,7 @@ export default function OnboardingPage() {
                 <div className="space-y-3">
                   {[
                     { label: "Full Name", value: agent.name },
-                    { label: "Email", value: agent.email },
+                    { label: "Personal Email", value: agent.personalEmail || agent.email || "—" },
                     { label: "Phone", value: agent.phone },
                     { label: "Start Date", value: new Date(agent.startDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) },
                     { label: "Status", value: agent.subscriptionStatus },

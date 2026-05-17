@@ -14,6 +14,7 @@ export interface IStorage {
   // Agents
   getAgent(id: number): Promise<Agent | undefined>;
   getAgentByEmail(email: string): Promise<Agent | undefined>;
+  getAgentByPhoneNormalized(phoneNormalized: string): Promise<Agent | undefined>;
   getAllAgents(): Promise<Agent[]>;
   createAgent(data: InsertAgent): Promise<Agent>;
   updateAgent(id: number, data: Partial<InsertAgent>): Promise<Agent | undefined>;
@@ -55,6 +56,11 @@ export class DatabaseStorage implements IStorage {
   async getAgentByEmail(email: string) {
     await ensureDatabase();
     const [agent] = await db.select().from(agents).where(eq(agents.email, email));
+    return agent;
+  }
+  async getAgentByPhoneNormalized(phoneNormalized: string) {
+    await ensureDatabase();
+    const [agent] = await db.select().from(agents).where(eq(agents.phoneNormalized, phoneNormalized));
     return agent;
   }
   async getAllAgents() {

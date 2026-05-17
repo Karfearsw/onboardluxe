@@ -1,4 +1,4 @@
-import { pgTable, text, integer, boolean, serial, index } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, boolean, serial, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -8,8 +8,11 @@ export const agents = pgTable(
   {
     id: serial("id").primaryKey(),
     name: text("name").notNull(),
-    email: text("email").notNull().unique(),
+    email: text("email"),
+    personalEmail: text("personal_email"),
+    companyEmail: text("company_email"),
     phone: text("phone").notNull(),
+    phoneNormalized: text("phone_normalized"),
     startDate: text("start_date").notNull(),
     subscriptionStatus: text("subscription_status").notNull().default("Trial"), // Trial | Active | Paused | Cancelled
     payoutMethodType: text("payout_method_type").default(""), // SoFi | PayPal | Bank | Zelle
@@ -24,6 +27,8 @@ export const agents = pgTable(
   },
   (t) => ({
     emailIdx: index("hr_agents_email_idx").on(t.email),
+    phoneNormalizedUnique: uniqueIndex("hr_agents_phone_normalized_unique").on(t.phoneNormalized),
+    companyEmailUnique: uniqueIndex("hr_agents_company_email_unique").on(t.companyEmail),
   }),
 );
 

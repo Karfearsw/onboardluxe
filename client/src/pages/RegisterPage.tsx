@@ -5,7 +5,6 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { Link } from "wouter";
 import luxeLogo from "@assets/luxe-logo.jpg";
@@ -48,7 +47,7 @@ const OceanLuxeLogo = () => (
 export default function RegisterPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const [form, setForm] = useState({ name: "", email: "", phone: "" });
+  const [form, setForm] = useState({ name: "", phone: "" });
 
   const { mutate, isPending } = useMutation({
     mutationFn: async (data: typeof form) => {
@@ -69,8 +68,8 @@ export default function RegisterPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name || !form.email || !form.phone) {
-      toast({ title: "Missing fields", description: "Please fill in all required fields.", variant: "destructive" });
+    if (!form.name || !form.phone) {
+      toast({ title: "Missing details", description: "Please enter your full name and phone number.", variant: "destructive" });
       return;
     }
     mutate(form);
@@ -111,18 +110,6 @@ export default function RegisterPage() {
                 placeholder="e.g. Giovanna Davis"
                 value={form.name}
                 onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                required
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="email" className="tracking-wide text-xs uppercase text-muted-foreground">Email Address <span className="text-destructive">*</span></Label>
-              <Input
-                id="email"
-                type="email"
-                data-testid="input-email"
-                placeholder="you@example.com"
-                value={form.email}
-                onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
                 required
               />
             </div>
