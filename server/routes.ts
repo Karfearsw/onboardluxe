@@ -12,7 +12,12 @@ import { insertAgentSchema, insertIcaSignatureSchema } from "../shared/schema.js
 import { PIPELINE_STAGES, normalizePipelineStage } from "../shared/status.js";
 import { z } from "zod";
 
-const debugEndpointsEnabled = process.env.DEBUG_ENDPOINTS === "1" || process.env.NODE_ENV !== "production";
+function envFlagEnabled(value: string | undefined) {
+  const raw = (value || "").trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
+}
+
+const debugEndpointsEnabled = envFlagEnabled(process.env.DEBUG_ENDPOINTS) || process.env.NODE_ENV !== "production";
 
 function normalizeHostname(value: string) {
   return value.trim().toLowerCase().replace(/:\d+$/, "").replace(/\.$/, "");
@@ -81,7 +86,7 @@ function getRequestHost(req: { headers: Record<string, unknown> }) {
 
 function signupIsAllowed(req: { headers: Record<string, unknown> }) {
   if (process.env.NODE_ENV !== "production") return true;
-  if ((process.env.APP_PUBLIC_SIGNUP || "").trim() === "1") return true;
+  if (envFlagEnabled(process.env.APP_PUBLIC_SIGNUP)) return true;
 
   const host = getRequestHost(req);
   const allowed = (process.env.SIGNUP_ALLOWED_HOSTS || "")
