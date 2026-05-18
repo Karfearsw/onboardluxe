@@ -9,6 +9,7 @@ import RegisterPage from "./pages/RegisterPage";
 import OnboardingPage from "./pages/OnboardingPage";
 import AgentDashboardPage from "./pages/AgentDashboardPage";
 import AdminPage from "./pages/AdminPage";
+import SystemHealthPage from "./pages/SystemHealthPage";
 import NotFound from "./pages/not-found";
 
 export default function App() {
@@ -21,6 +22,7 @@ export default function App() {
           <Route path="/agent" component={AgentDashboardPage} />
           <Route path="/onboarding/:id" component={OnboardingPage} />
           <Route path="/admin" component={AdminPage} />
+          <Route path="/health" component={SystemHealthPage} />
           <Route component={NotFound} />
         </Switch>
       </Router>
