@@ -146,7 +146,7 @@ function formatEventTime(value: string) {
 function formatEventLabel(evt: Pick<StatusEvent, "eventType" | "oldValue" | "newValue">) {
   const t = evt.eventType;
   if (t === "agent.created") return "Application submitted";
-  if (t === "pipeline.stage_changed") return `Stage updated: ${evt.oldValue} → ${evt.newValue}`;
+  if (t === "crm.pipeline_stage_changed" || t === "pipeline.stage_changed") return `Stage updated: ${evt.oldValue} → ${evt.newValue}`;
   if (t === "subscription.status_changed") return `Subscription: ${evt.oldValue} → ${evt.newValue}`;
   if (t === "onboarding.task_completed") return "Onboarding step completed";
   if (t === "onboarding.task_started") return "Onboarding task started";
@@ -187,6 +187,82 @@ function StageBadge({ stage }: { stage: string }) {
     <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium">
       <span className="text-[10px] uppercase tracking-widest text-muted-foreground">Stage</span>
       <span>{stage || "Applicant"}</span>
+    </span>
+  );
+}
+
+type CurrentStageVariant = "gold" | "muted" | "danger" | "success";
+
+function deriveCurrentStage(input: {
+  subscriptionStatus: string;
+  pipelineStage: string;
+  onboardingComplete: boolean;
+  onboardingProgressPercent?: number;
+  trainingCompleted?: number;
+  trainingTotal?: number;
+  emailRequestStatus?: string | null;
+  companyEmail?: string | null;
+}) {
+  const subscription = (input.subscriptionStatus || "").trim();
+  const pipeline = (input.pipelineStage || "").trim() || "Applicant";
+  const emailRequestStatus = (input.emailRequestStatus || "").trim();
+  const hasCompanyEmail = Boolean((input.companyEmail || "").trim());
+
+  if (subscription === "Cancelled") return { label: "Cancelled", variant: "danger" as const };
+  if (subscription === "Paused") return { label: "Paused", variant: "muted" as const };
+
+  if (pipeline === "Applicant") return { label: "Applicant", variant: "muted" as const };
+  if (pipeline === "Interview") return { label: "Interview", variant: "muted" as const };
+  if (pipeline === "Offer") return { label: "Offer Sent", variant: "gold" as const };
+
+  if (pipeline === "Hired") {
+    if (!input.onboardingComplete) {
+      const pct = Math.max(0, Math.min(100, Math.round(input.onboardingProgressPercent ?? 0)));
+      return { label: `Onboarding ${pct}%`, variant: "gold" as const };
+    }
+
+    if (typeof input.trainingTotal === "number" && input.trainingTotal > 0 && typeof input.trainingCompleted === "number") {
+      if (input.trainingCompleted < input.trainingTotal) {
+        return { label: `Training ${input.trainingCompleted}/${input.trainingTotal}`, variant: "gold" as const };
+      }
+    }
+
+    if (!hasCompanyEmail) {
+      if (emailRequestStatus === "requested") return { label: "Email Requested", variant: "gold" as const };
+      if (emailRequestStatus === "created") return { label: "Email Created", variant: "success" as const };
+      if (emailRequestStatus === "rejected") return { label: "Email Rejected", variant: "danger" as const };
+      if (emailRequestStatus) return { label: `Email ${emailRequestStatus.replace("_", " ")}`, variant: "muted" as const };
+      return { label: "Email Not Requested", variant: "muted" as const };
+    }
+
+    if (subscription !== "Active") return { label: "Ready to Activate", variant: "success" as const };
+    return { label: "Active", variant: "success" as const };
+  }
+
+  if (pipeline === "Active") {
+    if (subscription === "Active") return { label: "Active", variant: "success" as const };
+    return { label: "Ready to Activate", variant: "success" as const };
+  }
+
+  if (subscription === "Active") return { label: "Active", variant: "success" as const };
+  if (subscription === "Trial") return { label: "Trial", variant: "muted" as const };
+  return { label: pipeline || subscription || "—", variant: "muted" as const };
+}
+
+function CurrentStageBadge({ label, variant }: { label: string; variant: CurrentStageVariant }) {
+  const styles: Record<CurrentStageVariant, CSSProperties> = {
+    gold: { background: "rgba(212,168,45,0.12)", color: "hsl(43,85%,42%)", border: "1px solid rgba(212,168,45,0.3)" },
+    muted: { background: "rgba(0,0,0,0.04)", color: "#666", border: "1px solid #ddd" },
+    danger: { background: "rgba(239,68,68,0.08)", color: "#b91c1c", border: "1px solid rgba(239,68,68,0.22)" },
+    success: { background: "rgba(34,197,94,0.1)", color: "#15803d", border: "1px solid rgba(34,197,94,0.22)" },
+  };
+
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide" style={styles[variant]}>
+      <span className="text-[10px] uppercase tracking-[0.18em]" style={{ opacity: 0.8 }}>
+        Current
+      </span>
+      <span>{label}</span>
     </span>
   );
 }
@@ -368,6 +444,14 @@ export default function AdminPage() {
     queryFn: async () => (await apiRequest("GET", "/api/admin/email-requests")).json(),
     enabled: !!currentAdmin,
   });
+
+  const emailRequestIndex = useMemo(() => {
+    const map = new Map<number, EmailRequestSummary>();
+    for (const request of emailRequests) {
+      map.set(request.agentId, request);
+    }
+    return map;
+  }, [emailRequests]);
 
   const { mutate: revealEmailPassword, isPending: isRevealingEmailPassword } = useMutation({
     mutationFn: async (id: number) => (await apiRequest("POST", `/api/admin/email-requests/${id}/reveal`, {})).json(),
@@ -843,7 +927,7 @@ export default function AdminPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr style={{ borderBottom: "1px solid hsl(var(--border))", background: "hsl(var(--muted))" }}>
-                      {["Agent", "CRM", "Status", "Docs", "Onboarding", "Actions"].map((h) => (
+                      {["Agent", "CRM", "Status", "Current Stage", "Docs", "Onboarding", "Actions"].map((h) => (
                         <th key={h} className="text-left px-5 py-3 text-xs font-medium text-muted-foreground tracking-widest uppercase">{h}</th>
                       ))}
                     </tr>
@@ -852,6 +936,15 @@ export default function AdminPage() {
                     {filteredAgents.map((agent) => {
                       const pct = agent.onboardingComplete ? 100 : Math.round(((agent.onboardingStep - 1) / 6) * 100);
                       const isSelected = selectedAgentId === agent.id;
+                      const emailRequestStatus = emailRequestIndex.get(agent.id)?.status ?? null;
+                      const currentStage = deriveCurrentStage({
+                        subscriptionStatus: agent.subscriptionStatus,
+                        pipelineStage: agent.crmPipelineStage || "Applicant",
+                        onboardingComplete: agent.onboardingComplete,
+                        onboardingProgressPercent: pct,
+                        emailRequestStatus,
+                        companyEmail: agent.companyEmail,
+                      });
 
                       return (
                         <tr key={agent.id} className={`border-b border-border last:border-0 transition-colors ${isSelected ? "bg-muted/40" : "hover:bg-muted/30"}`} data-testid={`row-agent-${agent.id}`}>
@@ -875,6 +968,9 @@ export default function AdminPage() {
                             </div>
                           </td>
                           <td className="px-5 py-4"><StatusBadge status={agent.subscriptionStatus} /></td>
+                          <td className="px-5 py-4">
+                            <CurrentStageBadge label={currentStage.label} variant={currentStage.variant} />
+                          </td>
                           <td className="px-5 py-4"><span className="text-xs text-muted-foreground">{agent.payoutMethodType || "No payout"}</span></td>
                           <td className="px-5 py-4">
                             {agent.onboardingComplete ? (
@@ -952,10 +1048,32 @@ export default function AdminPage() {
                       {selectedAgentDetails.agent.name}
                     </h3>
                     <p className="text-sm text-muted-foreground">{selectedAgentDetails.agent.personalEmail || selectedAgentDetails.agent.email || "—"} · {selectedAgentDetails.agent.phone}</p>
-                    <div className="flex items-center gap-2 mt-2">
-                      <StatusBadge status={selectedAgentDetails.agent.subscriptionStatus} />
-                      <StageBadge stage={selectedAgentStatus?.pipelineStage || selectedAgentDetails.agent.crmPipelineStage || "Applicant"} />
-                    </div>
+                    {(() => {
+                      const pipelineStage = selectedAgentStatus?.pipelineStage || selectedAgentDetails.agent.crmPipelineStage || "Applicant";
+                      const onboardingComplete = selectedAgentStatus?.onboarding.complete ?? selectedAgentDetails.agent.onboardingComplete;
+                      const onboardingProgressPercent = selectedAgentStatus?.onboarding.progressPercent ?? selectedAgentDetails.metrics.progressPercent;
+                      const trainingCompleted = selectedAgentStatus?.training.completed ?? selectedAgentDetails.metrics.completedTrainingModules;
+                      const trainingTotal = selectedAgentStatus?.training.total ?? (selectedAgentDetails.training.length || 5);
+                      const emailRequestStatus = emailRequestIndex.get(selectedAgentDetails.agent.id)?.status ?? null;
+                      const currentStage = deriveCurrentStage({
+                        subscriptionStatus: selectedAgentDetails.agent.subscriptionStatus,
+                        pipelineStage,
+                        onboardingComplete,
+                        onboardingProgressPercent,
+                        trainingCompleted,
+                        trainingTotal,
+                        emailRequestStatus,
+                        companyEmail: selectedAgentDetails.agent.companyEmail,
+                      });
+
+                      return (
+                        <div className="flex items-center gap-2 mt-2 flex-wrap">
+                          <StatusBadge status={selectedAgentDetails.agent.subscriptionStatus} />
+                          <StageBadge stage={pipelineStage} />
+                          <CurrentStageBadge label={currentStage.label} variant={currentStage.variant} />
+                        </div>
+                      );
+                    })()}
                   </div>
                   <div className="text-right">
                     <p className="text-xs text-muted-foreground uppercase tracking-widest">Onboarding</p>

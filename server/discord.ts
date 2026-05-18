@@ -37,7 +37,7 @@ function resolveWebhookUrlsForEvent(event: string) {
     { re: /^debug\./, envKey: "DISCORD_WEBHOOK_URL_DEBUG" },
     { re: /^agent\.payout_/, envKey: "DISCORD_WEBHOOK_URL_FINANCE" },
     { re: /^agent\.email_/, envKey: "DISCORD_WEBHOOK_URL_IT" },
-    { re: /^(agent\.|onboarding\.)/, envKey: "DISCORD_WEBHOOK_URL_HR" },
+    { re: /^(agent\.|onboarding\.|training\.|subscription\.|crm\.)/, envKey: "DISCORD_WEBHOOK_URL_HR" },
   ];
 
   const group = groupRules.find((r) => r.re.test(event))?.envKey;
@@ -246,11 +246,30 @@ function minimizePayload(event: string, payload: unknown): unknown {
     };
   }
 
-  if (event === "agent.pipeline_stage_changed") {
+  if (event === "crm.pipeline_stage_changed" || event === "agent.pipeline_stage_changed") {
     return {
       agentId: p?.agentId,
       previousStage: p?.previousStage,
       nextStage: p?.nextStage,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  if (event === "subscription.status_changed") {
+    return {
+      agentId: p?.agentId,
+      previousStatus: p?.previousStatus,
+      nextStatus: p?.nextStatus,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  if (event === "onboarding.task_completed") {
+    return {
+      agentId: p?.agentId,
+      taskKey: p?.taskKey,
+      previousStatus: p?.previousStatus,
+      nextStatus: p?.nextStatus,
       timestamp: new Date().toISOString(),
     };
   }
@@ -276,6 +295,22 @@ function minimizePayload(event: string, payload: unknown): unknown {
       docType: doc?.docType,
       status: doc?.status,
       uploadedAt: doc?.uploadedAt,
+    };
+  }
+
+  if (event === "training.module_completed") {
+    return {
+      agentId: p?.agentId,
+      moduleKey: p?.moduleKey,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  if (event === "training.completed") {
+    return {
+      agentId: p?.agentId,
+      completedModules: p?.completedModules,
+      timestamp: new Date().toISOString(),
     };
   }
 

@@ -97,7 +97,7 @@ function StepStatusIcon({ status }: { status: string }) {
 function formatEventLabel(evt: StatusEvent) {
   const t = evt.eventType;
   if (t === "agent.created") return "Application submitted";
-  if (t === "pipeline.stage_changed") return `Stage updated: ${evt.oldValue} → ${evt.newValue}`;
+  if (t === "crm.pipeline_stage_changed" || t === "pipeline.stage_changed") return `Stage updated: ${evt.oldValue} → ${evt.newValue}`;
   if (t === "subscription.status_changed") return `Subscription: ${evt.oldValue} → ${evt.newValue}`;
   if (t === "onboarding.task_completed") return "Onboarding step completed";
   if (t === "onboarding.completed") return "Onboarding completed";

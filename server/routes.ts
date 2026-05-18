@@ -697,6 +697,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         oldValue: previous.subscriptionStatus,
         newValue: payload.subscriptionStatus,
       });
+      queueDiscordWebhook("subscription.status_changed", {
+        agentId: agent.id,
+        previousStatus: previous.subscriptionStatus,
+        nextStatus: payload.subscriptionStatus,
+        timestamp: new Date().toISOString(),
+      });
     }
     res.json(agent);
   });
@@ -1019,14 +1025,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     await logStatusEvent({
       agentId,
-      eventType: "pipeline.stage_changed",
+      eventType: "crm.pipeline_stage_changed",
       actorType: "admin",
       actorId: String(req.authUser?.id ?? ""),
       oldValue: previousStage,
       newValue: nextStage,
     });
 
-    queueDiscordWebhook("agent.pipeline_stage_changed", { agentId, previousStage, nextStage });
+    queueDiscordWebhook("crm.pipeline_stage_changed", { agentId, previousStage, nextStage });
 
     res.json({ ok: true, stage: nextStage });
   });
@@ -1084,6 +1090,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         newValue: status,
         metadata: { taskKey },
       });
+      if (status === "complete") {
+        queueDiscordWebhook("onboarding.task_completed", { agentId, taskKey, previousStatus, nextStatus: status });
+      }
     }
 
     if (status === "complete") {
@@ -1268,6 +1277,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           newValue: "complete",
           metadata: { completedModules: all.length },
         });
+        queueDiscordWebhook("training.completed", { agentId, completedModules: all.length });
       }
     }
     await logStatusEvent({
@@ -1277,6 +1287,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       actorId: String(req.authUser?.id ?? ""),
       metadata: { moduleKey },
     });
+    queueDiscordWebhook("training.module_completed", { agentId, moduleKey });
 
     const tasks = await storage.getOnboardingTasks(agentId);
     const allComplete = tasks.every((t) => t.status === "complete");
@@ -1292,7 +1303,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         queueDiscordWebhook("onboarding.completed", { agentId });
       }
     }
-    queueDiscordWebhook("agent.training_completed", { agentId, moduleKey, progress });
     res.json(progress);
   });
 
