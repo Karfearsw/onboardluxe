@@ -40,7 +40,7 @@
     - [x] Completing training produces `training.completed`
     - [x] Requesting email produces `agent.email_requested`
     - [x] Marking email created produces `agent.email_created`
-  - [ ] Commit and push to `main`
+  - [x] Commit and push to `main`
 
 # Task Dependencies
 - Task 2 depends on Task 1
