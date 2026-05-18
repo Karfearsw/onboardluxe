@@ -20,6 +20,11 @@ Date: 2026-05-17
 - `/api/healthz` returned `200` with `{ "ok": true, "dbOk": true }`.
 - `/api/admin/auth/diagnostics` returned `200` with `dbOk: true` and `authUser: null` (expected when logged out).
 
+## Re-test (after deploy)
+
+- After pushing `APP_PUBLIC_SIGNUP` boolean parsing, `POST /api/agents` still returned `403` on `career.oceanluxe.org`.
+- Next step is to ensure the Vercel project has either `APP_PUBLIC_SIGNUP=true` (or `1`) set and redeployed, or `SIGNUP_ALLOWED_HOSTS` set to include `career.oceanluxe.org`.
+
 ## Notes / follow-ups
 
 - To allow registration in production:
