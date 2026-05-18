@@ -1,0 +1,8 @@
+- [ ] Admin connectivity snapshot is visible and does not leak secrets/cookies
+- [ ] Global admin activity feed loads and is admin-protected
+- [ ] Per-agent timeline loads and is admin-protected
+- [ ] Lifecycle events are created for the required transition list
+- [ ] Discord notifications fire for lifecycle events with redacted payloads (no secrets)
+- [ ] Admin “Current Stage” label is consistent with lifecycle state + events
+- [ ] `npm run check` passes
+- [ ] `npm run build` passes

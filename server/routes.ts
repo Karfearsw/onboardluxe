@@ -3,10 +3,10 @@ import { createServer, type Server } from "http";
 import { getSharedAuthDiagnostics, requireSharedAdmin, requireSharedAuth } from "./auth.js";
 import { clearAgentSessionCookie, createAgentSession, deleteAgentSession, requireAgentAuth, requireAgentOrAdmin, setAgentSessionCookie } from "./agent-auth.js";
 import { pool } from "./db.js";
-import { sendDiscordWebhook } from "./discord.js";
+import { hasDiscordWebhookForEvent, queueDiscordWebhook, sendDiscordWebhook } from "./discord.js";
 import { decryptTempPassword, encryptTempPassword, generateTempPassword } from "./email-provisioning.js";
 import { clearHrAdminCookie, createHrAdminToken, hasHrAdminCookie, setHrAdminCookie, verifyHrAdminAccessCode } from "./hr-admin-access.js";
-import { listStatusEvents, logStatusEvent } from "./status-events.js";
+import { listAdminStatusEvents, listStatusEvents, listStatusEventsPage, logStatusEvent } from "./status-events.js";
 import { storage } from "./storage.js";
 import { insertAgentSchema, insertIcaSignatureSchema } from "../shared/schema.js";
 import { PIPELINE_STAGES, normalizePipelineStage } from "../shared/status.js";
@@ -117,6 +117,10 @@ const emailRequestListQuerySchema = z.object({
   agentId: z.string().trim().optional(),
   status: z.string().trim().optional(),
   limit: z.string().trim().optional(),
+});
+const adminEventsQuerySchema = z.object({
+  limit: z.string().trim().optional(),
+  cursor: z.string().trim().optional(),
 });
 const emailRequestUpdateSchema = z.object({
   requestedEmail: z.string().trim().optional(),
@@ -258,8 +262,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
 
     app.post("/api/debug/discord", async (req, res) => {
-      if (!process.env.DISCORD_WEBHOOK_URL?.trim()) {
-        return res.status(400).json({ ok: false, message: "DISCORD_WEBHOOK_URL not set" });
+      if (!hasDiscordWebhookForEvent("debug.discord_test")) {
+        return res.status(400).json({ ok: false, message: "Discord webhook not configured" });
       }
 
       try {
@@ -267,7 +271,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           timestamp: new Date().toISOString(),
           ip: req.ip,
           body: req.body ?? null,
-        });
+        }, { throwOnError: true });
         return res.json({ ok: true });
       } catch (e) {
         const error = e instanceof Error ? e : new Error(String(e));
@@ -489,13 +493,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       metadata: { requestedEmail },
     });
 
-    void sendDiscordWebhook("agent.email_requested", {
+    queueDiscordWebhook("agent.email_requested", {
       agentId,
       requestedEmail,
       emailRequestId: request.id,
       timestamp: now,
-    }).catch((error) => {
-      console.error("Discord webhook failed (agent.email_requested):", error);
     });
 
     res.status(existing ? 200 : 201).json({ request: serializeEmailRequest(request), tempPassword });
@@ -559,13 +561,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       metadata: { requestedEmail },
     });
 
-    void sendDiscordWebhook("agent.email_requested", {
+    queueDiscordWebhook("agent.email_requested", {
       agentId,
       requestedEmail,
       emailRequestId: request.id,
       timestamp: now,
-    }).catch((error) => {
-      console.error("Discord webhook failed (agent.email_requested):", error);
     });
 
     res.status(existing ? 200 : 201).json({ request: serializeEmailRequest(request), tempPassword });
@@ -646,9 +646,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         actorType: "system",
         metadata: { name: agent.name, phone: phoneNormalized },
       });
-      void sendDiscordWebhook("agent.created", { agent }).catch((error) => {
-        console.error("Discord webhook failed (agent.created):", error);
-      });
+      queueDiscordWebhook("agent.created", { agent });
       res.status(201).json(agent);
     } catch (e: any) {
       if (e instanceof z.ZodError) {
@@ -706,6 +704,59 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ── Admin ─────────────────────────────────────────────────────────────────
   app.get("/api/admin/me", requireSharedAuth, async (req, res) => {
     res.json(req.authUser);
+  });
+
+  app.get("/api/admin/events", requireSharedAdmin, async (req, res) => {
+    const parsed = adminEventsQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid query", issues: parsed.error.issues });
+    }
+
+    const limitRaw = (parsed.data.limit || "").trim();
+    const limitValue = limitRaw ? Number(limitRaw) : 100;
+    if (!Number.isFinite(limitValue) || limitValue <= 0) {
+      return res.status(400).json({ message: "Invalid limit" });
+    }
+    const limit = Math.min(Math.floor(limitValue), 250);
+
+    const cursorRaw = (parsed.data.cursor || "").trim();
+    const cursorValue = cursorRaw ? Number(cursorRaw) : undefined;
+    if (cursorRaw && (!Number.isFinite(cursorValue) || (cursorValue ?? 0) <= 0)) {
+      return res.status(400).json({ message: "Invalid cursor" });
+    }
+
+    const events = await listAdminStatusEvents({ limit, beforeId: cursorValue });
+    const nextCursor = events.length ? events[events.length - 1]?.id ?? null : null;
+    res.json({ events, nextCursor });
+  });
+
+  app.get("/api/admin/agents/:id/events", requireSharedAdmin, async (req, res) => {
+    const agentId = Number(req.params.id);
+    if (!Number.isFinite(agentId) || agentId <= 0) return res.status(400).json({ message: "Invalid agent id" });
+    const agent = await storage.getAgent(agentId);
+    if (!agent) return res.status(404).json({ message: "Agent not found" });
+
+    const parsed = adminEventsQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid query", issues: parsed.error.issues });
+    }
+
+    const limitRaw = (parsed.data.limit || "").trim();
+    const limitValue = limitRaw ? Number(limitRaw) : 100;
+    if (!Number.isFinite(limitValue) || limitValue <= 0) {
+      return res.status(400).json({ message: "Invalid limit" });
+    }
+    const limit = Math.min(Math.floor(limitValue), 250);
+
+    const cursorRaw = (parsed.data.cursor || "").trim();
+    const cursorValue = cursorRaw ? Number(cursorRaw) : undefined;
+    if (cursorRaw && (!Number.isFinite(cursorValue) || (cursorValue ?? 0) <= 0)) {
+      return res.status(400).json({ message: "Invalid cursor" });
+    }
+
+    const events = await listStatusEventsPage({ agentId, limit, beforeId: cursorValue });
+    const nextCursor = events.length ? events[events.length - 1]?.id ?? null : null;
+    res.json({ events, nextCursor });
   });
 
   app.get("/api/admin/email-requests", requireSharedAdmin, async (req, res) => {
@@ -774,6 +825,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const request = await storage.getEmailRequest(id);
     if (!request) return res.status(404).json({ message: "Email request not found" });
+    const previousStatus = request.status;
+    const previousRequestedEmail = request.requestedEmail;
 
     const requestedEmailRaw = (parsed.data.requestedEmail || "").trim();
     const requestedEmail = requestedEmailRaw ? requestedEmailRaw.toLowerCase() : "";
@@ -790,6 +843,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const suppliedTempPassword = (parsed.data.tempPassword || "").trim();
     const shouldGenerate = parsed.data.generateTempPassword === true && !suppliedTempPassword;
     const nextTempPassword = suppliedTempPassword ? suppliedTempPassword : shouldGenerate ? generateTempPassword() : "";
+    const willSetTempPassword = Boolean(nextTempPassword);
 
     try {
       const updated = await storage.updateEmailRequest(id, {
@@ -801,6 +855,55 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         tempPasswordRevealedAt: nextTempPassword ? "" : undefined,
         updatedAt: now,
       });
+
+      if (!updated) return res.status(404).json({ message: "Email request not found" });
+
+      if (requestedEmail && requestedEmail !== previousRequestedEmail) {
+        await logStatusEvent({
+          agentId: request.agentId,
+          eventType: "email.requested_email_changed",
+          actorType: "admin",
+          actorId: String(req.authUser?.id ?? ""),
+          oldValue: previousRequestedEmail,
+          newValue: requestedEmail,
+          metadata: { emailRequestId: request.id },
+        });
+      }
+
+      if (typeof parsed.data.status === "string" && parsed.data.status !== previousStatus) {
+        await logStatusEvent({
+          agentId: request.agentId,
+          eventType: parsed.data.status === "created"
+            ? "agent.email_created"
+            : parsed.data.status === "rejected"
+              ? "agent.email_rejected"
+              : "agent.email_requested",
+          actorType: "admin",
+          actorId: String(req.authUser?.id ?? ""),
+          oldValue: previousStatus,
+          newValue: parsed.data.status,
+          metadata: { requestedEmail: requestedEmail || previousRequestedEmail, emailRequestId: request.id },
+        });
+
+        if (parsed.data.status === "created" && previousStatus !== "created") {
+          queueDiscordWebhook("agent.email_created", {
+            agentId: request.agentId,
+            requestedEmail: requestedEmail || previousRequestedEmail,
+            emailRequestId: request.id,
+            timestamp: now,
+          });
+        }
+      }
+
+      if (willSetTempPassword) {
+        await logStatusEvent({
+          agentId: request.agentId,
+          eventType: "email.temp_password_reset",
+          actorType: "admin",
+          actorId: String(req.authUser?.id ?? ""),
+          metadata: { requestedEmail: requestedEmail || previousRequestedEmail, emailRequestId: request.id },
+        });
+      }
 
       res.json({
         ...serializeEmailRequest(updated),
@@ -847,13 +950,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       metadata: { requestedEmail: request.requestedEmail, emailRequestId: request.id },
     });
     if (parsed.data.status === "created" && previousStatus !== "created") {
-      void sendDiscordWebhook("agent.email_created", {
+      queueDiscordWebhook("agent.email_created", {
         agentId: request.agentId,
         requestedEmail: request.requestedEmail,
         emailRequestId: request.id,
         timestamp: now,
-      }).catch((error) => {
-        console.error("Discord webhook failed (agent.email_created):", error);
       });
     }
     res.json({
@@ -925,9 +1026,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       newValue: nextStage,
     });
 
-    void sendDiscordWebhook("agent.pipeline_stage_changed", { agentId, previousStage, nextStage }).catch((error) => {
-      console.error("Discord webhook failed (agent.pipeline_stage_changed):", error);
-    });
+    queueDiscordWebhook("agent.pipeline_stage_changed", { agentId, previousStage, nextStage });
 
     res.json({ ok: true, stage: nextStage });
   });
@@ -961,37 +1060,57 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.patch("/api/agents/:id/onboarding/:taskKey", requireAgentOrAdmin("id"), async (req, res) => {
     const { status } = onboardingStatusSchema.parse(req.body);
-    const task = await storage.updateTaskStatus(Number(String(req.params.id)), String(req.params.taskKey), status);
+    const agentId = Number(String(req.params.id));
+    const taskKey = String(req.params.taskKey);
+    if (!Number.isFinite(agentId) || agentId <= 0) return res.status(400).json({ message: "Invalid agent id" });
+    const tasksBefore = await storage.getOnboardingTasks(agentId);
+    const existing = tasksBefore.find((t) => t.taskKey === taskKey);
+    const previousStatus = existing?.status || "";
+
+    const task = await storage.updateTaskStatus(agentId, taskKey, status);
     if (!task) return res.status(404).json({ message: "Task not found" });
 
-    // Auto-advance agent's onboarding step
+    if (status !== previousStatus) {
+      await logStatusEvent({
+        agentId,
+        eventType: status === "complete"
+          ? "onboarding.task_completed"
+          : status === "in_progress"
+            ? "onboarding.task_started"
+            : "onboarding.task_status_changed",
+        actorType: req.authUser ? "admin" : "agent",
+        actorId: String(req.authUser?.id ?? ""),
+        oldValue: previousStatus,
+        newValue: status,
+        metadata: { taskKey },
+      });
+    }
+
     if (status === "complete") {
-      const tasks = await storage.getOnboardingTasks(Number(String(req.params.id)));
+      const tasks = await storage.getOnboardingTasks(agentId);
       const nextPending = tasks.find((t) => t.status === "pending");
       const allComplete = tasks.every((t) => t.status === "complete");
 
-      await logStatusEvent({
-        agentId: Number(String(req.params.id)),
-        eventType: "onboarding.task_completed",
-        actorType: req.authUser ? "admin" : "agent",
-        actorId: String(req.authUser?.id ?? ""),
-        metadata: { taskKey: String(req.params.taskKey) },
-      });
-
       if (nextPending) {
-        await storage.updateTaskStatus(Number(String(req.params.id)), nextPending.taskKey, "in_progress");
-        await storage.updateAgent(Number(String(req.params.id)), { onboardingStep: nextPending.stepNumber });
+        await storage.updateTaskStatus(agentId, nextPending.taskKey, "in_progress");
+        await storage.updateAgent(agentId, { onboardingStep: nextPending.stepNumber });
+        await logStatusEvent({
+          agentId,
+          eventType: "onboarding.task_started",
+          actorType: "system",
+          oldValue: nextPending.status,
+          newValue: "in_progress",
+          metadata: { taskKey: nextPending.taskKey },
+        });
       }
       if (allComplete) {
-        await storage.updateAgent(Number(String(req.params.id)), { onboardingComplete: true, onboardingStep: 6 });
+        await storage.updateAgent(agentId, { onboardingComplete: true, onboardingStep: 6 });
         await logStatusEvent({
-          agentId: Number(String(req.params.id)),
+          agentId,
           eventType: "onboarding.completed",
           actorType: "system",
         });
-        void sendDiscordWebhook("onboarding.completed", { agentId: Number(String(req.params.id)) }).catch((error) => {
-          console.error("Discord webhook failed (onboarding.completed):", error);
-        });
+        queueDiscordWebhook("onboarding.completed", { agentId });
       }
     }
     res.json(task);
@@ -1019,9 +1138,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         actorType: req.authUser ? "admin" : "agent",
         actorId: String(req.authUser?.id ?? ""),
       });
-      void sendDiscordWebhook("agent.ica_signed", { agentId: Number(String(req.params.id)), signature: sig }).catch((error) => {
-        console.error("Discord webhook failed (agent.ica_signed):", error);
-      });
+      queueDiscordWebhook("agent.ica_signed", { agentId: Number(String(req.params.id)), signature: sig });
       res.status(201).json(sig);
     } catch (e: any) {
       res.status(400).json({ message: e.message });
@@ -1057,9 +1174,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         actorId: String(req.authUser?.id ?? ""),
         metadata: { docType: String(docType), documentId: doc.id },
       });
-      void sendDiscordWebhook("agent.document_added", { agentId: Number(String(req.params.id)), document: doc }).catch((error) => {
-        console.error("Discord webhook failed (agent.document_added):", error);
-      });
+      queueDiscordWebhook("agent.document_added", { agentId: Number(String(req.params.id)), document: doc });
       res.status(201).json(doc);
     } catch (e: any) {
       res.status(400).json({ message: e.message });
@@ -1105,9 +1220,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       actorId: String(req.authUser?.id ?? ""),
       metadata: { payoutMethodType },
     });
-    void sendDiscordWebhook("agent.payout_submitted", { agent }).catch((error) => {
-      console.error("Discord webhook failed (agent.payout_submitted):", error);
-    });
+    queueDiscordWebhook("agent.payout_submitted", { agent });
     res.json(agent);
   });
 
@@ -1134,39 +1247,52 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.post("/api/agents/:id/training/:moduleKey/complete", requireAgentOrAdmin("id"), async (req, res) => {
-    const progress = await storage.upsertTrainingProgress(Number(String(req.params.id)), String(req.params.moduleKey));
-    // Check if all training modules done
-    const all = await storage.getTrainingProgress(Number(String(req.params.id)));
-    if (all.length > 0 && all.every((m) => m.completed)) {
-      await storage.updateTaskStatus(Number(String(req.params.id)), "training", "complete");
-    }
-    await logStatusEvent({
-      agentId: Number(String(req.params.id)),
-      eventType: "training.module_completed",
-      actorType: req.authUser ? "admin" : "agent",
-      actorId: String(req.authUser?.id ?? ""),
-      metadata: { moduleKey: String(req.params.moduleKey) },
-    });
+    const agentId = Number(String(req.params.id));
+    const moduleKey = String(req.params.moduleKey);
+    if (!Number.isFinite(agentId) || agentId <= 0) return res.status(400).json({ message: "Invalid agent id" });
+    const tasksBefore = await storage.getOnboardingTasks(agentId);
+    const trainingTaskBefore = tasksBefore.find((t) => t.taskKey === "training");
+    const previousTrainingStatus = trainingTaskBefore?.status || "";
 
-    const tasks = await storage.getOnboardingTasks(Number(String(req.params.id)));
-    const allComplete = tasks.every((t) => t.status === "complete");
-    if (allComplete) {
-      const agent = await storage.getAgent(Number(String(req.params.id)));
-      if (agent && !agent.onboardingComplete) {
-        await storage.updateAgent(Number(String(req.params.id)), { onboardingComplete: true, onboardingStep: 6 });
+    const progress = await storage.upsertTrainingProgress(agentId, moduleKey);
+    const all = await storage.getTrainingProgress(agentId);
+    if (all.length > 0 && all.every((m) => m.completed)) {
+      await storage.updateTaskStatus(agentId, "training", "complete");
+      if (previousTrainingStatus !== "complete") {
         await logStatusEvent({
-          agentId: Number(String(req.params.id)),
-          eventType: "onboarding.completed",
-          actorType: "system",
-        });
-        void sendDiscordWebhook("onboarding.completed", { agentId: Number(String(req.params.id)) }).catch((error) => {
-          console.error("Discord webhook failed (onboarding.completed):", error);
+          agentId,
+          eventType: "training.completed",
+          actorType: req.authUser ? "admin" : "agent",
+          actorId: String(req.authUser?.id ?? ""),
+          oldValue: previousTrainingStatus,
+          newValue: "complete",
+          metadata: { completedModules: all.length },
         });
       }
     }
-    void sendDiscordWebhook("agent.training_completed", { agentId: Number(String(req.params.id)), moduleKey: String(req.params.moduleKey), progress }).catch((error) => {
-      console.error("Discord webhook failed (agent.training_completed):", error);
+    await logStatusEvent({
+      agentId,
+      eventType: "training.module_completed",
+      actorType: req.authUser ? "admin" : "agent",
+      actorId: String(req.authUser?.id ?? ""),
+      metadata: { moduleKey },
     });
+
+    const tasks = await storage.getOnboardingTasks(agentId);
+    const allComplete = tasks.every((t) => t.status === "complete");
+    if (allComplete) {
+      const agent = await storage.getAgent(agentId);
+      if (agent && !agent.onboardingComplete) {
+        await storage.updateAgent(agentId, { onboardingComplete: true, onboardingStep: 6 });
+        await logStatusEvent({
+          agentId,
+          eventType: "onboarding.completed",
+          actorType: "system",
+        });
+        queueDiscordWebhook("onboarding.completed", { agentId });
+      }
+    }
+    queueDiscordWebhook("agent.training_completed", { agentId, moduleKey, progress });
     res.json(progress);
   });
 

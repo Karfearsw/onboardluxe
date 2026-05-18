@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type InfiniteData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
@@ -87,6 +87,18 @@ interface StatusEvent {
   createdAt: string;
 }
 
+interface AdminStatusEvent extends StatusEvent {
+  agentName: string;
+  agentSubscriptionStatus: string;
+  agentPipelineStage: string;
+  agentCompanyEmail: string;
+}
+
+interface AdminEventsPage<TEvent> {
+  events: TEvent[];
+  nextCursor: number | null;
+}
+
 interface AgentStatusSummary {
   agentId: number;
   pipelineStage: string;
@@ -131,17 +143,25 @@ function formatEventTime(value: string) {
   }
 }
 
-function formatEventLabel(evt: StatusEvent) {
+function formatEventLabel(evt: Pick<StatusEvent, "eventType" | "oldValue" | "newValue">) {
   const t = evt.eventType;
   if (t === "agent.created") return "Application submitted";
   if (t === "pipeline.stage_changed") return `Stage updated: ${evt.oldValue} → ${evt.newValue}`;
   if (t === "subscription.status_changed") return `Subscription: ${evt.oldValue} → ${evt.newValue}`;
   if (t === "onboarding.task_completed") return "Onboarding step completed";
+  if (t === "onboarding.task_started") return "Onboarding task started";
   if (t === "onboarding.completed") return "Onboarding completed";
   if (t === "document.uploaded") return "Document uploaded";
   if (t === "document.status_changed") return `Document review: ${evt.newValue}`;
   if (t === "ica.signed") return "ICA signed";
   if (t === "payout.submitted") return "Payout method submitted";
+  if (t === "email.temp_password_revealed") return "Temp email password revealed";
+  if (t === "email.temp_password_reset") return "Temp email password reset";
+  if (t === "email.requested_email_changed") return "Requested email updated";
+  if (t === "agent.email_requested") return "Company email requested";
+  if (t === "agent.email_created") return "Company email created";
+  if (t === "agent.email_rejected") return "Company email rejected";
+  if (t === "training.completed") return "Training completed";
   if (t === "training.module_completed") return "Training module completed";
   if (t === "sofi.referral_opened") return "SoFi referral link opened";
   return t;
@@ -158,6 +178,15 @@ function StatusBadge({ status }: { status: string }) {
   return (
     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium tracking-wide" style={styles[status] || styles.Trial}>
       {status}
+    </span>
+  );
+}
+
+function StageBadge({ stage }: { stage: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium">
+      <span className="text-[10px] uppercase tracking-widest text-muted-foreground">Stage</span>
+      <span>{stage || "Applicant"}</span>
     </span>
   );
 }
@@ -291,6 +320,48 @@ export default function AdminPage() {
     queryFn: async () => (await apiRequest("GET", `/api/admin/agents/${selectedAgentId}/status`)).json(),
     enabled: !!currentAdmin && !!selectedAgentId,
   });
+
+  const globalEventsKey = ["/api/admin/events"] as const;
+  const globalEvents = useInfiniteQuery<
+    AdminEventsPage<AdminStatusEvent>,
+    Error,
+    InfiniteData<AdminEventsPage<AdminStatusEvent>, number | null>,
+    typeof globalEventsKey,
+    number | null
+  >({
+    queryKey: globalEventsKey,
+    initialPageParam: null,
+    queryFn: async ({ pageParam }) => {
+      const cursor = typeof pageParam === "number" ? `&cursor=${pageParam}` : "";
+      return (await apiRequest("GET", `/api/admin/events?limit=60${cursor}`)).json();
+    },
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    enabled: !!currentAdmin,
+  });
+
+  const agentEventsKey = ["/api/admin/agents", selectedAgentId, "events"] as const;
+  const agentEvents = useInfiniteQuery<
+    AdminEventsPage<StatusEvent>,
+    Error,
+    InfiniteData<AdminEventsPage<StatusEvent>, number | null>,
+    typeof agentEventsKey,
+    number | null
+  >({
+    queryKey: agentEventsKey,
+    initialPageParam: null,
+    queryFn: async ({ pageParam }) => {
+      if (!selectedAgentId) {
+        return { events: [], nextCursor: null };
+      }
+      const cursor = typeof pageParam === "number" ? `&cursor=${pageParam}` : "";
+      return (await apiRequest("GET", `/api/admin/agents/${selectedAgentId}/events?limit=75${cursor}`)).json();
+    },
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    enabled: !!currentAdmin && !!selectedAgentId,
+  });
+
+  const globalActivityEvents = globalEvents.data?.pages.flatMap((page) => page.events) ?? [];
+  const agentTimelineEvents = agentEvents.data?.pages.flatMap((page) => page.events) ?? [];
 
   const { data: emailRequests = [], isLoading: isLoadingEmailRequests } = useQuery<EmailRequestSummary[]>({
     queryKey: ["/api/admin/email-requests"],
@@ -674,6 +745,78 @@ export default function AdminPage() {
           </div>
         )}
 
+        <div className="bg-card border border-border rounded-xl overflow-hidden mb-6">
+          <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid hsl(var(--border))" }}>
+            <div>
+              <h2 className="font-semibold text-sm tracking-wide">Global Activity Feed</h2>
+              <p className="text-xs text-muted-foreground mt-1">Latest admin + agent lifecycle events across Ocean Luxe</p>
+            </div>
+            <button
+              onClick={() => qc.invalidateQueries({ queryKey: globalEventsKey })}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              type="button"
+            >
+              <RefreshCcw className="h-4 w-4" />
+            </button>
+          </div>
+
+          {globalEvents.isLoading ? (
+            <div className="p-8 text-center text-muted-foreground text-sm">Loading activity feed...</div>
+          ) : globalActivityEvents.length === 0 ? (
+            <div className="p-8 text-center text-muted-foreground text-sm">No activity yet.</div>
+          ) : (
+            <div className="max-h-[420px] overflow-auto">
+              {globalActivityEvents.map((evt) => (
+                <button
+                  key={`${evt.id}-${evt.agentId}`}
+                  type="button"
+                  onClick={() => setSelectedAgentId(evt.agentId)}
+                  className="w-full text-left px-5 py-3 border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-6">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0 text-white" style={{ background: "#0a0a0a" }}>
+                        {(evt.agentName || "A").charAt(0)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs text-muted-foreground truncate">
+                          <span className="font-medium text-foreground">{evt.agentName}</span>
+                          {evt.agentCompanyEmail ? <span className="text-muted-foreground"> · {evt.agentCompanyEmail}</span> : null}
+                        </p>
+                        <p className="text-sm font-medium leading-snug">{formatEventLabel(evt)}</p>
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-xs text-muted-foreground">{formatEventTime(evt.createdAt)}</p>
+                      <div className="flex items-center justify-end gap-2 mt-2">
+                        <StatusBadge status={evt.agentSubscriptionStatus} />
+                        <StageBadge stage={evt.agentPipelineStage} />
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="px-5 py-3 flex items-center justify-between" style={{ borderTop: "1px solid hsl(var(--border))" }}>
+            <p className="text-xs text-muted-foreground">{globalActivityEvents.length ? `Showing ${globalActivityEvents.length} events` : "—"}</p>
+            {globalEvents.hasNextPage ? (
+              <button
+                type="button"
+                onClick={() => globalEvents.fetchNextPage()}
+                disabled={globalEvents.isFetchingNextPage}
+                className="text-xs font-semibold transition-opacity disabled:opacity-50"
+                style={{ color: "hsl(43,85%,42%)" }}
+              >
+                {globalEvents.isFetchingNextPage ? "Loading..." : "Load more"}
+              </button>
+            ) : (
+              <span className="text-xs text-muted-foreground">End of feed</span>
+            )}
+          </div>
+        </div>
+
         <div className="grid gap-6 xl:grid-cols-[1.25fr,0.95fr]">
           <div className="bg-card border border-border rounded-xl overflow-hidden">
             <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid hsl(var(--border))" }}>
@@ -783,7 +926,15 @@ export default function AdminPage() {
                 <p className="text-xs text-muted-foreground mt-1">Review onboarding, approve docs, and link Luxe RM records</p>
               </div>
               {selectedAgentId && (
-                <button onClick={() => qc.invalidateQueries({ queryKey: ["/api/admin/agents", selectedAgentId] })} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+                <button
+                  type="button"
+                  onClick={() => {
+                    qc.invalidateQueries({ queryKey: ["/api/admin/agents", selectedAgentId] });
+                    qc.invalidateQueries({ queryKey: ["/api/admin/agents", selectedAgentId, "status"] });
+                    qc.invalidateQueries({ queryKey: agentEventsKey });
+                  }}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
                   <RefreshCcw className="h-4 w-4" />
                 </button>
               )}
@@ -803,9 +954,7 @@ export default function AdminPage() {
                     <p className="text-sm text-muted-foreground">{selectedAgentDetails.agent.personalEmail || selectedAgentDetails.agent.email || "—"} · {selectedAgentDetails.agent.phone}</p>
                     <div className="flex items-center gap-2 mt-2">
                       <StatusBadge status={selectedAgentDetails.agent.subscriptionStatus} />
-                      <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium">
-                        {selectedAgentDetails.agent.crmPipelineStage || "Applicant"}
-                      </span>
+                      <StageBadge stage={selectedAgentStatus?.pipelineStage || selectedAgentDetails.agent.crmPipelineStage || "Applicant"} />
                     </div>
                   </div>
                   <div className="text-right">
@@ -946,20 +1095,37 @@ export default function AdminPage() {
 
                 <div className="space-y-3 rounded-xl border border-border p-4">
                   <div className="flex items-center justify-between">
-                    <h4 className="font-semibold text-sm tracking-wide">Recent Updates</h4>
-                    <span className="text-xs text-muted-foreground">{selectedAgentStatus?.events?.length ? `${selectedAgentStatus.events.length} events` : "—"}</span>
+                    <h4 className="font-semibold text-sm tracking-wide">Timeline</h4>
+                    <span className="text-xs text-muted-foreground">{agentTimelineEvents.length ? `${agentTimelineEvents.length} events` : "—"}</span>
                   </div>
-                  <div className="space-y-2">
-                    {(selectedAgentStatus?.events || []).slice(0, 12).map((evt) => (
-                      <div key={evt.id} className="rounded-lg bg-muted/40 px-3 py-2">
-                        <p className="text-sm font-medium">{formatEventLabel(evt)}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{formatEventTime(evt.createdAt)}</p>
-                      </div>
-                    ))}
-                    {(selectedAgentStatus?.events || []).length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No updates yet.</p>
-                    ) : null}
-                  </div>
+                  {agentEvents.isLoading ? (
+                    <div className="text-center text-sm text-muted-foreground py-6">Loading timeline...</div>
+                  ) : agentTimelineEvents.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No timeline events yet.</p>
+                  ) : (
+                    <div className="pl-3 border-l border-border space-y-3">
+                      {agentTimelineEvents.map((evt) => (
+                        <div key={evt.id} className="relative">
+                          <div className="absolute -left-[13px] top-3 h-2 w-2 rounded-full" style={{ background: "hsl(43,85%,45%)" }} />
+                          <div className="rounded-lg bg-muted/40 px-3 py-2">
+                            <p className="text-sm font-medium">{formatEventLabel(evt)}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">{formatEventTime(evt.createdAt)}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {agentEvents.hasNextPage ? (
+                    <button
+                      type="button"
+                      onClick={() => agentEvents.fetchNextPage()}
+                      disabled={agentEvents.isFetchingNextPage}
+                      className="w-full rounded-md border border-border px-3 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                    >
+                      {agentEvents.isFetchingNextPage ? "Loading more..." : "Load more"}
+                    </button>
+                  ) : null}
                 </div>
 
                 <div className="space-y-3 rounded-xl border border-border p-4">

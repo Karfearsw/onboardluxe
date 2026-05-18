@@ -53,7 +53,9 @@ NODE_ENV=production node dist/index.cjs
 
 ## Discord Notifications (Optional)
 
-- Set `DISCORD_WEBHOOK_URL` to enable event notifications (agent created, docs added, ICA signed, payout/training updates, pipeline stage changes, onboarding completion).
+- Set `DISCORD_WEBHOOK_URL` to enable a default notification sink for all lifecycle events.
+- Optionally route events to different webhooks with `DISCORD_WEBHOOK_URL_HR`, `DISCORD_WEBHOOK_URL_IT`, `DISCORD_WEBHOOK_URL_FINANCE`, `DISCORD_WEBHOOK_URL_DEBUG`.
+- Optionally override a single event with `DISCORD_WEBHOOK_URL_EVENT_<EVENT_NAME>` (example: `DISCORD_WEBHOOK_URL_EVENT_AGENT_CREATED` for `agent.created`).
 
 ## Application Status
 
