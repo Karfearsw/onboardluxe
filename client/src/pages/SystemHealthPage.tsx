@@ -17,8 +17,8 @@ function formatJson(value: unknown) {
 
 function statusBadge(ok: boolean | null) {
   if (ok === null) return <Badge variant="secondary">Unknown</Badge>;
-  if (ok) return <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">OK</Badge>;
-  return <Badge variant="destructive">Down</Badge>;
+  if (ok) return <Badge className="bg-[#D4AF37] text-black hover:bg-[#D4AF37]">OK</Badge>;
+  return <Badge variant="secondary">Down</Badge>;
 }
 
 async function fetchJsonOrText(url: string) {

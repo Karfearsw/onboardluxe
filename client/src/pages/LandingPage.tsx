@@ -146,7 +146,7 @@ export default function LandingPage() {
       </section>
 
       {/* Onboarding steps */}
-      <section className="py-20 px-6" style={{ background: "#f9f9f9", borderTop: "1px solid #eee" }}>
+      <section className="py-20 px-6 bg-background" style={{ borderTop: "1px solid rgba(212,168,45,0.15)" }}>
         <div className="max-w-3xl mx-auto">
           <h2 className="text-3xl font-semibold text-center mb-2" style={{ fontFamily: "'Cormorant Garamond', serif" }}>Onboarding in 6 simple steps</h2>
           <div className="w-12 h-px mx-auto mb-2" style={{ background: "hsl(43,85%,52%)" }} />
@@ -160,7 +160,7 @@ export default function LandingPage() {
               { n: 5, title: "Set up payout", sub: "SoFi, PayPal, or bank transfer" },
               { n: 6, title: "Complete training", sub: "5 short modules — cold calling to deal closing" },
             ].map(step => (
-              <div key={step.n} className="flex items-center gap-4 bg-white border border-border rounded-xl px-5 py-4 gold-hover">
+              <div key={step.n} className="flex items-center gap-4 bg-card border border-border rounded-xl px-5 py-4 gold-hover">
                 <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0" style={{ background: "#0a0a0a", color: "hsl(43,85%,52%)" }}>
                   {step.n}
                 </div>

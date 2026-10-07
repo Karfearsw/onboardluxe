@@ -251,10 +251,12 @@ function deriveCurrentStage(input: {
 
 function CurrentStageBadge({ label, variant }: { label: string; variant: CurrentStageVariant }) {
   const styles: Record<CurrentStageVariant, CSSProperties> = {
-    gold: { background: "rgba(212,168,45,0.12)", color: "hsl(43,85%,42%)", border: "1px solid rgba(212,168,45,0.3)" },
-    muted: { background: "rgba(0,0,0,0.04)", color: "#666", border: "1px solid #ddd" },
-    danger: { background: "rgba(239,68,68,0.08)", color: "#b91c1c", border: "1px solid rgba(239,68,68,0.22)" },
-    success: { background: "rgba(34,197,94,0.1)", color: "#15803d", border: "1px solid rgba(34,197,94,0.22)" },
+    // Gold/neutral treatments only — dark luxury spec, no red/green/amber.
+    // Success/positive states → gold; negative states → solid neutral; info → soft neutral.
+    gold: { background: "rgba(212,168,45,0.12)", color: "hsl(43,85%,52%)", border: "1px solid rgba(212,168,45,0.3)" },
+    muted: { background: "rgba(255,255,255,0.05)", color: "#a3a3a3", border: "1px solid #2e2e2e" },
+    danger: { background: "#1c1c1c", color: "#f5f5f5", border: "1px solid #404040" },
+    success: { background: "rgba(212,168,45,0.12)", color: "hsl(43,85%,52%)", border: "1px solid rgba(212,168,45,0.3)" },
   };
 
   return (
@@ -269,9 +271,10 @@ function CurrentStageBadge({ label, variant }: { label: string; variant: Current
 
 function DocStatusBadge({ status }: { status: string }) {
   const styles: Record<string, CSSProperties> = {
-    Approved: { background: "rgba(34,197,94,0.1)", color: "#15803d", border: "1px solid rgba(34,197,94,0.2)" },
-    Rejected: { background: "rgba(239,68,68,0.1)", color: "#b91c1c", border: "1px solid rgba(239,68,68,0.2)" },
-    "Pending Review": { background: "rgba(245,158,11,0.12)", color: "#b45309", border: "1px solid rgba(245,158,11,0.22)" },
+    // Gold for positive, neutral for pending/rejected — dark luxury spec.
+    Approved: { background: "rgba(212,168,45,0.14)", color: "hsl(43,85%,52%)", border: "1px solid rgba(212,168,45,0.3)" },
+    Rejected: { background: "#1c1c1c", color: "#f5f5f5", border: "1px solid #404040" },
+    "Pending Review": { background: "rgba(255,255,255,0.06)", color: "#d4d4d4", border: "1px solid #2e2e2e" },
   };
 
   return (
@@ -283,9 +286,10 @@ function DocStatusBadge({ status }: { status: string }) {
 
 function TaskStatusBadge({ status }: { status: string }) {
   const styles: Record<string, CSSProperties> = {
-    complete: { background: "rgba(34,197,94,0.1)", color: "#15803d" },
-    in_progress: { background: "rgba(245,158,11,0.12)", color: "#b45309" },
-    pending: { background: "rgba(148,163,184,0.12)", color: "#64748b" },
+    // Gold for complete, neutral for in-progress/pending — dark luxury spec.
+    complete: { background: "rgba(212,168,45,0.14)", color: "hsl(43,85%,52%)" },
+    in_progress: { background: "rgba(255,255,255,0.1)", color: "#f5f5f5" },
+    pending: { background: "rgba(255,255,255,0.04)", color: "#a3a3a3" },
   };
 
   return (
@@ -819,7 +823,7 @@ export default function AdminPage() {
                 ${stats.mrr.toLocaleString()} / $5,000
               </span>
             </div>
-            <div className="h-2 rounded-full overflow-hidden" style={{ background: "#f0f0f0" }}>
+            <div className="h-2 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.08)" }}>
               <div
                 className="h-full rounded-full transition-all duration-500"
                 style={{ width: `${Math.max(stats.mrrPercent, 1)}%`, background: "linear-gradient(90deg, hsl(43,85%,45%), hsl(43,90%,58%))" }}

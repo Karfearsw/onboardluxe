@@ -76,10 +76,11 @@ export default {
           border: "var(--sidebar-accent-border)"
         },
         status: {
-          online: "rgb(34 197 94)",
-          away: "rgb(245 158 11)",
-          busy: "rgb(239 68 68)",
-          offline: "rgb(156 163 175)",
+          // Gold/neutral only — dark luxury spec (no red/green/amber).
+          online: "rgb(212 175 55)", // gold
+          away: "rgb(163 163 163)", // neutral gray
+          busy: "rgb(245 245 245)", // near-white
+          offline: "rgb(82 82 82)", // dark neutral
         },
       },
       fontFamily: {
