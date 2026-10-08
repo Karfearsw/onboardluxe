@@ -590,15 +590,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const { phone, email } = req.body || {};
       let agent = null;
 
-      if (phone && String(phone).trim()) {
-        const phoneNormalized = normalizePhone(String(phone));
-        if (phoneNormalized.length >= 10) {
-          agent = await storage.getAgentByPhoneNormalized(phoneNormalized);
-        }
-      }
-      if (!agent && email && String(email).trim()) {
-        const emailNormalized = String(email).trim().toLowerCase();
-        agent = await storage.getAgentByEmail(emailNormalized);
+      const phoneNormalized = phone && String(phone).trim() ? normalizePhone(String(phone)) : "";
+      const emailNormalized = email && String(email).trim() ? String(email).trim().toLowerCase() : "";
+
+      // Robust lookup handles pre-migration accounts (missing phoneNormalized,
+      // email stored in personalEmail instead of email column).
+      if ((phoneNormalized && phoneNormalized.length >= 10) || emailNormalized) {
+        agent = await storage.findAgentByPhoneOrEmail(phoneNormalized, emailNormalized);
       }
 
       if (!agent) {

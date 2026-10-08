@@ -15,6 +15,7 @@ export interface IStorage {
   getAgent(id: number): Promise<Agent | undefined>;
   getAgentByEmail(email: string): Promise<Agent | undefined>;
   getAgentByPhoneNormalized(phoneNormalized: string): Promise<Agent | undefined>;
+  findAgentByPhoneOrEmail(phoneNormalized: string, email: string): Promise<Agent | undefined>;
   getAllAgents(): Promise<Agent[]>;
   createAgent(data: InsertAgent): Promise<Agent>;
   updateAgent(id: number, data: Partial<InsertAgent>): Promise<Agent | undefined>;
@@ -56,7 +57,29 @@ export class DatabaseStorage implements IStorage {
   async getAgentByEmail(email: string) {
     await ensureDatabase();
     const [agent] = await db.select().from(agents).where(eq(agents.email, email));
-    return agent;
+    if (agent) return agent;
+    // Fall back to personalEmail for accounts created before the email split
+    const [byPersonal] = await db.select().from(agents).where(eq(agents.personalEmail, email));
+    return byPersonal;
+  }
+
+  // Robust lookup: tries phoneNormalized, then raw phone digits, then both email fields.
+  // Handles accounts created before migrations backfilled the normalized columns.
+  async findAgentByPhoneOrEmail(phoneNormalized: string, email: string) {
+    await ensureDatabase();
+    if (phoneNormalized) {
+      const [byNorm] = await db.select().from(agents).where(eq(agents.phoneNormalized, phoneNormalized));
+      if (byNorm) return byNorm;
+      // Fall back: compare digits-stripped raw phone for pre-migration accounts
+      const all = await db.select().from(agents);
+      const match = all.find(a => a.phone && a.phone.replace(/\D/g, "") === phoneNormalized);
+      if (match) return match;
+    }
+    if (email) {
+      const byEmail = await this.getAgentByEmail(email);
+      if (byEmail) return byEmail;
+    }
+    return undefined;
   }
   async getAgentByPhoneNormalized(phoneNormalized: string) {
     await ensureDatabase();
