@@ -24,6 +24,8 @@ export const agents = pgTable(
     crmPipelineStage: text("crm_pipeline_stage").notNull().default("Applicant"),
     onboardingStep: integer("onboarding_step").notNull().default(1), // 1-6
     onboardingComplete: boolean("onboarding_complete").notNull().default(false),
+    applicationData: text("application_data"), // JSON string of draft application form data
+    applicationUpdatedAt: text("application_updated_at").default(""),
   },
   (t) => ({
     emailIdx: index("hr_agents_email_idx").on(t.email),
