@@ -583,6 +583,107 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(agent);
   });
 
+  // ── Resume Application: public lookup by phone OR email ──────────────────
+  // Returns sanitized agent data (no sensitive fields) for resuming a draft.
+  app.post("/api/agents/lookup", async (req, res) => {
+    try {
+      const { phone, email } = req.body || {};
+      let agent = null;
+
+      if (phone && String(phone).trim()) {
+        const phoneNormalized = normalizePhone(String(phone));
+        if (phoneNormalized.length >= 10) {
+          agent = await storage.getAgentByPhoneNormalized(phoneNormalized);
+        }
+      }
+      if (!agent && email && String(email).trim()) {
+        const emailNormalized = String(email).trim().toLowerCase();
+        agent = await storage.getAgentByEmail(emailNormalized);
+      }
+
+      if (!agent) {
+        return res.status(404).json({ message: "No application found for that phone number or email." });
+      }
+
+      // Sanitize: only return fields needed to resume the form
+      let applicationData = {};
+      try {
+        applicationData = agent.applicationData ? JSON.parse(agent.applicationData) : {};
+      } catch { /* ignore malformed JSON */ }
+
+      res.json({
+        id: agent.id,
+        name: agent.name,
+        phone: agent.phone,
+        email: agent.email || agent.personalEmail || "",
+        applicationData,
+        applicationUpdatedAt: agent.applicationUpdatedAt || "",
+        crmPipelineStage: agent.crmPipelineStage,
+      });
+    } catch (e: any) {
+      console.error("Agent lookup failed:", e);
+      res.status(500).json({ message: "Lookup failed. Please try again." });
+    }
+  });
+
+  // ── Resume Application: save partial progress (upsert draft) ─────────────
+  // Creates a draft agent record if none exists for this phone/email.
+  app.post("/api/agents/save-progress", async (req, res) => {
+    try {
+      const { phone, email, formData } = req.body || {};
+      if (!phone && !email) {
+        return res.status(400).json({ message: "Phone or email is required to save progress." });
+      }
+
+      let agent = null;
+      const phoneNormalized = phone ? normalizePhone(String(phone)) : "";
+
+      if (phoneNormalized.length >= 10) {
+        agent = await storage.getAgentByPhoneNormalized(phoneNormalized);
+      }
+      if (!agent && email && String(email).trim()) {
+        agent = await storage.getAgentByEmail(String(email).trim().toLowerCase());
+      }
+
+      const draftJson = JSON.stringify(formData || {});
+      const now = new Date().toISOString();
+
+      if (agent) {
+        // Update existing draft
+        const updated = await storage.updateAgent(agent.id, {
+          applicationData: draftJson,
+          applicationUpdatedAt: now,
+          // Fill in email/phone if the draft didn't have them
+          ...(email && !agent.email ? { email: String(email).trim().toLowerCase() } : {}),
+        });
+        return res.json({ id: agent.id, saved: true, updatedAt: now });
+      }
+
+      // Create a new draft record (minimal — full registration happens on submit)
+      if (phoneNormalized.length < 10) {
+        return res.status(400).json({ message: "A valid phone number is required to save a new draft." });
+      }
+      const data = insertAgentSchema.parse({
+        name: (formData && formData.name) || "Draft Applicant",
+        phone: String(phone),
+        phoneNormalized,
+        email: email ? String(email).trim().toLowerCase() : null,
+        startDate: now,
+        subscriptionStatus: "Trial",
+        crmPipelineStage: "Applicant",
+        onboardingStep: 1,
+        onboardingComplete: false,
+        applicationData: draftJson,
+        applicationUpdatedAt: now,
+      });
+      const created = await storage.createAgent(data);
+      res.status(201).json({ id: created.id, saved: true, updatedAt: now, isNewDraft: true });
+    } catch (e: any) {
+      console.error("Save progress failed:", e);
+      res.status(500).json({ message: "Could not save progress. Please try again." });
+    }
+  });
+
   app.post("/api/agents", async (req, res) => {
     if (!signupIsAllowed(req)) {
       return res.status(403).json({
