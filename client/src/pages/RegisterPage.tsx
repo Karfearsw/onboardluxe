@@ -258,36 +258,36 @@ export default function RegisterPage() {
                 data-testid="input-name"
                 placeholder="e.g. Giovanna Davis"
                 value={form.name}
-                onChange={e = onBlur={handleBlur}> setForm(f => ({ ...f, name: e.target.value }))}
+                onChange={e => setForm(f => ({ ...f, name: e.target.value }))} onBlur={handleBlur}
                 required
               />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="email" className="tracking-wide text-xs uppercase text-muted-foreground">Email Address</Label>
-              <Input id="email" type="email" placeholder="you@email.com" value={form.email} onChange={e = onBlur={handleBlur}> setForm(f => ({ ...f, email: e.target.value }))} />
+              <Input id="email" type="email" placeholder="you@email.com" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} onBlur={handleBlur} />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="position" className="tracking-wide text-xs uppercase text-muted-foreground">Position of Interest</Label>
-              <select id="position" value={form.position} onChange={e = onBlur={handleBlur}> setForm(f => ({ ...f, position: e.target.value }))} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+              <select id="position" value={form.position} onChange={e => setForm(f => ({ ...f, position: e.target.value }))} onBlur={handleBlur} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
                 <option>Virtual Assistant</option><option>Acquisitions Agent</option><option>Senior Acquisitions Agent</option>
               </select>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="resume" className="tracking-wide text-xs uppercase text-muted-foreground">Resume</Label>
-              <Input id="resume" type="file" accept=".pdf,.doc,.docx" onChange={e = onBlur={handleBlur}> setForm(f => ({ ...f, resumeName: e.target.files?.[0]?.name || "" }))} />
+              <Input id="resume" type="file" accept=".pdf,.doc,.docx" onChange={e => setForm(f => ({ ...f, resumeName: e.target.files?.[0]?.name || "" }))} onBlur={handleBlur} />
               <p className="text-xs text-muted-foreground flex items-center gap-1"><FileUp className="h-3 w-3" /> Resume filename will be included with your application.</p>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="experience" className="tracking-wide text-xs uppercase text-muted-foreground">Relevant Experience</Label>
-              <Input id="experience" placeholder="Sales, real estate, customer success..." value={form.experience} onChange={e = onBlur={handleBlur}> setForm(f => ({ ...f, experience: e.target.value }))} />
+              <Input id="experience" placeholder="Sales, real estate, customer success..." value={form.experience} onChange={e => setForm(f => ({ ...f, experience: e.target.value }))} onBlur={handleBlur} />
             </div>
             <div className="space-y-1.5">
               <Label className="tracking-wide text-xs uppercase text-muted-foreground">Interview Questions</Label>
-              {["Tell us about your experience and the strengths you would bring to this role.", "Describe a time you solved a problem or took initiative.", "Why are you interested in working with Ocean Luxe?"] .map((question, index) => <div key={question} className="space-y-1"><p className="text-xs text-muted-foreground">{question}</p><textarea value={form.interviewAnswers[index]} onChange={e = onBlur={handleBlur}> setForm(f => ({ ...f, interviewAnswers: f.interviewAnswers.map((answer, i) => i === index ? e.target.value : answer) }))} className="min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" /></div>)}
+              {["Tell us about your experience and the strengths you would bring to this role.", "Describe a time you solved a problem or took initiative.", "Why are you interested in working with Ocean Luxe?"] .map((question, index) => <div key={question} className="space-y-1"><p className="text-xs text-muted-foreground">{question}</p><textarea value={form.interviewAnswers[index]} onChange={e => setForm(f => ({ ...f, interviewAnswers: f.interviewAnswers.map((answer, i) => i === index ? e.target.value : answer) }))} onBlur={handleBlur} className="min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" /></div>)}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="whyOceanLuxe" className="tracking-wide text-xs uppercase text-muted-foreground">Why Ocean Luxe?</Label>
-              <textarea id="whyOceanLuxe" placeholder="Tell us what draws you to the team..." value={form.whyOceanLuxe} onChange={e = onBlur={handleBlur}> setForm(f => ({ ...f, whyOceanLuxe: e.target.value }))} className="min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+              <textarea id="whyOceanLuxe" placeholder="Tell us what draws you to the team..." value={form.whyOceanLuxe} onChange={e => setForm(f => ({ ...f, whyOceanLuxe: e.target.value }))} onBlur={handleBlur} className="min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="phone" className="tracking-wide text-xs uppercase text-muted-foreground">Phone Number <span className="text-destructive">*</span></Label>
@@ -297,7 +297,7 @@ export default function RegisterPage() {
                 data-testid="input-phone"
                 placeholder="(555) 000-0000"
                 value={form.phone}
-                onChange={e = onBlur={handleBlur}> setForm(f => ({ ...f, phone: e.target.value }))}
+                onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} onBlur={handleBlur}
                 required
               />
             </div>
