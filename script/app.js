@@ -78,6 +78,7 @@ function writeJSON(key, value) {
    Progress tracking (persisted)
    ================================================= */
 const _progressStore = readJSON(STORAGE_KEYS.progress, {}) || {};
+const TOTAL_LESSONS = 10;
 
 function getAgentIdFromQuery() {
   try {
@@ -96,7 +97,12 @@ const LESSON_TO_MODULE_KEY = {
   2: 'cold_calling',
   3: 'objections',
   4: 'deal_analysis',
-  5: 'crm_walkthrough'
+  5: 'crm_walkthrough',
+  6: 'crm_pipeline',
+  7: 'dialer_usage',
+  8: 'skip_trace_sop',
+  9: 'compliance_tcpa',
+  10: 'dispo_process'
 };
 
 async function markModuleCompleteInOnboardLuxe(lessonNum) {
@@ -136,7 +142,7 @@ function markLessonComplete(lessonNum) {
 
   // If all lessons are complete, emit a course completion signal once.
   try {
-    if (getCompletedCount() === 5) {
+    if (getCompletedCount() === TOTAL_LESSONS) {
       const alreadySent = readJSON(STORAGE_KEYS.scorm, {}).courseCompleted === true;
       if (!alreadySent) {
         const nextState = { ...(readJSON(STORAGE_KEYS.scorm, {}) || {}), courseCompleted: true };
@@ -162,12 +168,12 @@ function isLessonComplete(lessonNum) {
 
 function getCompletedCount() {
   let count = 0;
-  for (let i = 1; i <= 5; i++) if (isLessonComplete(i)) count++;
+  for (let i = 1; i <= TOTAL_LESSONS; i++) if (isLessonComplete(i)) count++;
   return count;
 }
 
 function resetProgress() {
-  for (let i = 1; i <= 5; i++) delete _progressStore['lesson_' + i];
+  for (let i = 1; i <= TOTAL_LESSONS; i++) delete _progressStore['lesson_' + i];
   writeJSON(STORAGE_KEYS.progress, _progressStore);
   updateNavProgress();
   updateLessonCards();
@@ -178,8 +184,8 @@ function updateNavProgress() {
   const count = getCompletedCount();
   const fill = document.getElementById('navProgressFill');
   const text = document.getElementById('navProgressText');
-  if (fill) fill.style.width = (count / 5 * 100) + '%';
-  if (text) text.textContent = count + ' / 5 complete';
+  if (fill) fill.style.width = (count / TOTAL_LESSONS * 100) + '%';
+  if (text) text.textContent = count + ' / ' + TOTAL_LESSONS + ' complete';
 }
 
 // Update lesson cards on home page
@@ -199,7 +205,7 @@ function updateLessonCards() {
   });
 
   const banner = document.getElementById('completionBanner');
-  if (banner && getCompletedCount() === 5) {
+  if (banner && getCompletedCount() === TOTAL_LESSONS) {
     banner.style.display = 'block';
   }
 }
@@ -268,7 +274,7 @@ function initContinueButton() {
 
   // Find first incomplete lesson; if all complete, send to course home.
   let next = null;
-  for (let i = 1; i <= 5; i++) {
+  for (let i = 1; i <= TOTAL_LESSONS; i++) {
     if (!isLessonComplete(i)) {
       next = i;
       break;
@@ -386,8 +392,9 @@ function printCertificate() {
         <h1>Ocean Luxe Estate LLC</h1>
         <h2>Certificate of Course Completion</h2>
         <p>This certifies successful completion of the<br><strong>New Agent Onboarding eCourse</strong><br>
-        covering all five core modules:<br>
-        Welcome · Cold Calling · Objection Handling · Deal Analysis · CRM Walkthrough</p>
+        covering all ten core modules:<br>
+        Welcome · Cold Calling · Objection Handling · Deal Analysis · CRM Walkthrough ·<br>
+        CRM Pipeline · Dialer Usage · Skip-Trace SOP · TCPA &amp; Compliance · Disposition</p>
         <p class="date">Completed: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
         <div class="sig">Ocean Luxe Estate LLC · HR Department</div>
       </div>
@@ -419,7 +426,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (_) {}
       }
       // also clear in-memory copy
-      for (let i = 1; i <= 5; i++) delete _progressStore['lesson_' + i];
+      for (let i = 1; i <= TOTAL_LESSONS; i++) delete _progressStore['lesson_' + i];
       updateNavProgress();
       updateLessonCards();
       location.reload();

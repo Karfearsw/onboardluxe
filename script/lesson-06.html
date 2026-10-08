@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lesson 06 — CRM Workflows: Leads to Contracts | Training</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@300..700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <header class="nav">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-logo" aria-label="Ocean Luxe Training Home">
+        <svg width="32" height="32" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+          <path d="M20 4C11.163 4 4 11.163 4 20c0 6.19 3.39 11.6 8.4 14.5L20 36l7.6-1.5C32.61 31.6 36 26.19 36 20 36 11.163 28.837 4 20 4z" fill="#C9A84C" opacity="0.15"/>
+          <path d="M8 22c2-4 5-7 8-8 1.5 5 4 9 7 11 1-4 3-7 6-9 1 3 1.5 6 1 9-2.5 2-5 3-8 3-4 0-8-2-11-5l-3-1z" fill="#C9A84C" opacity="0.6"/>
+          <circle cx="20" cy="20" r="3" fill="#C9A84C"/>
+        </svg>
+        <span class="nav-brand">Ocean Luxe <em>Training</em></span>
+      </a>
+      <div class="nav-right">
+        <div class="nav-progress-pill" id="navProgressPill">
+          <span id="navProgressText">0 / 10 complete</span>
+          <div class="nav-progress-track">
+            <div class="nav-progress-fill" id="navProgressFill" style="width:0%"></div>
+          </div>
+        </div>
+        <button class="theme-toggle" data-theme-toggle aria-label="Switch to light mode">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="lesson-layout">
+    <main class="lesson-main">
+      <nav class="lesson-breadcrumb" aria-label="Breadcrumb">
+        <a href="index.html">Course Home</a>
+        <span>›</span>
+        <span>Lesson 06</span>
+      </nav>
+
+      <header class="lesson-header">
+        <div class="lesson-eyebrow">RE-OL-06 · 8 minutes</div>
+        <h1 class="lesson-title">CRM Workflows: Leads → Pipeline → Contracts</h1>
+        <div class="lesson-meta-row">
+          <span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+            SDR · Agent
+          </span>
+          <span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            8 min read
+          </span>
+          <span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            Knowledge Check (3 questions · pass 3/3)
+          </span>
+        </div>
+      </header>
+
+      <div class="lesson-content">
+
+        <!-- SECTION 1 -->
+        <section class="lesson-section">
+          <h2 class="lesson-section-title">The Pipeline, Stage by Stage</h2>
+          <p class="lesson-text">Every lead lives in exactly one pipeline stage at a time. The stage is not a vibe — it is a claim that a specific thing happened. Use the stage names shown in your CRM (they are being standardized company-wide); never invent your own.</p>
+
+          <ol class="lesson-steps">
+            <li><div><strong>New</strong> — The lead just arrived and nobody has touched it yet. Your job: contact it fast.</div></li>
+            <li><div><strong>Contacted</strong> — You reached the person (or left a real voicemail / got a response). Log the attempt and set the next step.</div></li>
+            <li><div><strong>Qualified</strong> — They have a property, a motivation signal, and a timeline. Motivation + timeline + property = qualification.</div></li>
+            <li><div><strong>Appointment</strong> — A property walkthrough or detailed call is scheduled. Date and time are set.</div></li>
+            <li><div><strong>Negotiation</strong> — You know the numbers (ARV, repairs, MAO from Lesson 04) and you are making or discussing an offer.</div></li>
+            <li><div><strong>Under Contract</strong> — A purchase agreement is signed by the seller. The deal is real now — it gets treated like it.</div></li>
+            <li><div><strong>Closed</strong> — The assignment or sale funded. Only evidence-backed closes count — see Section 3.</div></li>
+          </ol>
+
+          <div class="callout">
+            <div class="callout-label">Exit Lanes</div>
+            <p><strong>Lost</strong> (not motivated, not a fit, unresponsive after follow-up) and <strong>Do Not Contact</strong> (opt-out) are terminal stages. Close leads out cleanly — a bloated pipeline is how real deals get missed.</p>
+          </div>
+        </section>
+
+        <!-- SECTION 2 -->
+        <section class="lesson-section">
+          <h2 class="lesson-section-title">Stage Discipline: What Moves a Lead Forward</h2>
+          <p class="lesson-text">A stage moves only when the <strong>logged event that earned it</strong> exists in the CRM. If it isn't logged, it didn't happen.</p>
+
+          <ul class="lesson-list">
+            <li><strong>Log the earning event first, move the stage second.</strong> The call log, appointment, or signed offer is the proof; the stage is just the label.</li>
+            <li><strong>One lead, one stage, one owner.</strong> Never park a lead in two stages, and never let a lead sit ownerless.</li>
+            <li><strong>No stale leads.</strong> A lead untouched for more than a few days is a lead going cold. Every active lead has a next step with a date — that's what keeps them moving.</li>
+            <li><strong>Never move a lead backward without a reason.</strong> If a deal falls apart, log why it fell apart, then move it to the correct stage (often back to Negotiation or Qualified) with a new next step.</li>
+            <li><strong>DNC flags follow the lead forever.</strong> If a lead opted out, the flag stays no matter what stage they're in. There is no "re-activating" an opt-out.</li>
+          </ul>
+        </section>
+
+        <!-- SECTION 3 -->
+        <section class="lesson-section">
+          <h2 class="lesson-section-title">From Negotiation to Signed Contract</h2>
+          <p class="lesson-text">The jump from Negotiation to Under Contract is where money enters the picture — so the evidence bar goes up.</p>
+
+          <div class="formula-box">
+            <div class="formula-text">Evidence-Based Close Gates</div>
+            <div class="formula-sub" style="text-align:left; max-width:460px; margin:var(--space-4) auto 0;">
+              1. Signed purchase agreement on file (seller signature + date)<br>
+              2. Correct property details match the lead record<br>
+              3. Earnest money / deposit terms recorded<br>
+              4. Title or closing coordination started
+            </div>
+          </div>
+
+          <ul class="lesson-list">
+            <li><strong>A deal closes in the CRM only when the evidence exists.</strong> Marking a deal closed without a signed agreement and supporting records is a reportable offense — it falsifies company revenue reporting.</li>
+            <li><strong>Production data is real people only.</strong> Never create test leads, test deals, or test contracts in the live CRM. Training and testing happen in the sandbox or training environment only.</li>
+            <li><strong>Contracts live in the Contracts module,</strong> linked to the lead record — not in chat threads, not in your personal drive, not in email attachments.</li>
+          </ul>
+        </section>
+
+        <!-- SECTION 4 -->
+        <section class="lesson-section">
+          <h2 class="lesson-section-title">Your Daily Pipeline Routine</h2>
+          <ol class="lesson-steps">
+            <li><div><strong>Start with overdue follow-ups.</strong> Open your task queue first — anything due today or overdue gets touched before anything else.</div></li>
+            <li><div><strong>Work new leads first, then hot deals.</strong> New leads age the fastest. Then work Negotiation and Appointment leads — deals closest to money.</div></li>
+            <li><div><strong>End of day: zero orphans.</strong> Before you stop, every lead you touched has a next step with a date. Nothing sits "in limbo" overnight.</div></li>
+          </ol>
+
+          <div class="callout">
+            <div class="callout-label">Key Principle</div>
+            <p>The pipeline is a promise to the future. Every stage move, every log, every follow-up is you telling tomorrow's teammate (or tomorrow's you) exactly what to do next.</p>
+          </div>
+        </section>
+
+        <!-- PRACTICE -->
+        <section class="lesson-section">
+          <h2 class="lesson-section-title">Quick Practice</h2>
+          <div class="practice-box">
+            <div class="practice-title">Stage It</div>
+            <p class="lesson-text" style="font-size:var(--text-sm); margin-bottom:var(--space-3);">A seller answered your call, confirmed they own the property free and clear, said they're "thinking about selling in the next 60 days," and agreed to a walkthrough next Tuesday at 2 PM. What stage is this lead in, and what two things must you log before you move it there?</p>
+            <textarea class="practice-textarea" placeholder='"Stage: ________. Must log: 1) ________ 2) ________."'></textarea>
+          </div>
+        </section>
+
+        <!-- QUIZ -->
+        <section class="quiz-section">
+          <div class="quiz-header">
+            <h2 class="quiz-title">Knowledge Check</h2>
+            <p class="quiz-subtitle">3 questions · pass 3/3 to complete this lesson</p>
+          </div>
+
+          <div class="quiz-question" data-q="0">
+            <div class="quiz-q-text">1. What earns a lead the right to move to the next pipeline stage?</div>
+            <div class="quiz-options">
+              <button class="quiz-option" data-opt="0"><span class="quiz-option-letter">A</span> Your judgment that it "feels ready"</button>
+              <button class="quiz-option" data-opt="1"><span class="quiz-option-letter">B</span> The logged event that the stage requires (call log, appointment, signed offer)</button>
+              <button class="quiz-option" data-opt="2"><span class="quiz-option-letter">C</span> The number of days since the lead arrived</button>
+              <button class="quiz-option" data-opt="3"><span class="quiz-option-letter">D</span> A manager verbally telling you to move it</button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question" data-q="1">
+            <div class="quiz-q-text">2. A seller says "Take me off your list," but the deal looked promising. What do you do?</div>
+            <div class="quiz-options">
+              <button class="quiz-option" data-opt="0"><span class="quiz-option-letter">A</span> Move them to Lost and try again next month</button>
+              <button class="quiz-option" data-opt="1"><span class="quiz-option-letter">B</span> Keep them in Negotiation in case they change their mind</button>
+              <button class="quiz-option" data-opt="2"><span class="quiz-option-letter">C</span> Mark Do Not Contact immediately — the flag follows the lead permanently</button>
+              <button class="quiz-option" data-opt="3"><span class="quiz-option-letter">D</span> Have a teammate call them instead</button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question" data-q="2">
+            <div class="quiz-q-text">3. When can you mark a deal "Closed" in the CRM?</div>
+            <div class="quiz-options">
+              <button class="quiz-option" data-opt="0"><span class="quiz-option-letter">A</span> When the seller verbally accepts your offer</button>
+              <button class="quiz-option" data-opt="1"><span class="quiz-option-letter">B</span> When you've found a buyer for the property</button>
+              <button class="quiz-option" data-opt="2"><span class="quiz-option-letter">C</span> When you want to hit your numbers for the week</button>
+              <button class="quiz-option" data-opt="3"><span class="quiz-option-letter">D</span> Only when the evidence gates are met: signed agreement, correct property, deposit terms, closing coordination started</button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-submit-row">
+            <button class="btn-submit" id="quizSubmit">Submit Answers</button>
+          </div>
+
+          <div class="quiz-score-box" id="quizScoreBox">
+            <div class="quiz-score-num" id="quizScoreNum">—</div>
+            <div class="quiz-score-msg" id="quizScoreMsg"></div>
+            <a href="lesson-07.html" class="btn-primary" style="display:inline-flex; margin:0 auto;">Next Lesson: Dialer Usage →</a>
+          </div>
+        </section>
+
+      </div>
+    </main>
+
+    <aside class="lesson-sidebar">
+      <div class="sidebar-card">
+        <div class="sidebar-title">Learning Objectives</div>
+        <ul class="sidebar-objectives">
+          <li>State the standard pipeline stages and what earns each stage</li>
+          <li>Apply stage discipline: log first, move second; one stage, one owner</li>
+          <li>Identify the evidence required to close a deal in the CRM</li>
+        </ul>
+        <div class="sidebar-nav">
+          <a href="lesson-05.html" class="btn-nav">← Lesson 05</a>
+          <a href="lesson-07.html" class="btn-nav primary">Next: Dialer Usage →</a>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    const questions = [
+      { correct: 1, explanation: 'Stages are claims that something happened. The logged event (call log, appointment, signed offer) is the proof — log first, move second.' },
+      { correct: 2, explanation: 'An opt-out is final. Mark Do Not Contact immediately; the flag follows the lead forever. No one else calls them either.' },
+      { correct: 3, explanation: 'Closing requires evidence: signed agreement, correct property, deposit terms recorded, and closing coordination started. A verbal "yes" is Negotiation, not Closed.' }
+    ];
+    initQuiz(questions, 3, () => {
+      markLessonComplete(6);
+      updateNavProgress();
+    });
+  </script>
+</body>
+</html>

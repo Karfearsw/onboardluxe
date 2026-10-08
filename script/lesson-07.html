@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lesson 07 — Dialer Usage: Power Dialer, Dispositions &amp; DNC | Training</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@300..700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <header class="nav">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-logo" aria-label="Ocean Luxe Training Home">
+        <svg width="32" height="32" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+          <path d="M20 4C11.163 4 4 11.163 4 20c0 6.19 3.39 11.6 8.4 14.5L20 36l7.6-1.5C32.61 31.6 36 26.19 36 20 36 11.163 28.837 4 20 4z" fill="#C9A84C" opacity="0.15"/>
+          <path d="M8 22c2-4 5-7 8-8 1.5 5 4 9 7 11 1-4 3-7 6-9 1 3 1.5 6 1 9-2.5 2-5 3-8 3-4 0-8-2-11-5l-3-1z" fill="#C9A84C" opacity="0.6"/>
+          <circle cx="20" cy="20" r="3" fill="#C9A84C"/>
+        </svg>
+        <span class="nav-brand">Ocean Luxe <em>Training</em></span>
+      </a>
+      <div class="nav-right">
+        <div class="nav-progress-pill" id="navProgressPill">
+          <span id="navProgressText">0 / 10 complete</span>
+          <div class="nav-progress-track">
+            <div class="nav-progress-fill" id="navProgressFill" style="width:0%"></div>
+          </div>
+        </div>
+        <button class="theme-toggle" data-theme-toggle aria-label="Switch to light mode">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="lesson-layout">
+    <main class="lesson-main">
+      <nav class="lesson-breadcrumb" aria-label="Breadcrumb">
+        <a href="index.html">Course Home</a>
+        <span>›</span>
+        <span>Lesson 07</span>
+      </nav>
+
+      <header class="lesson-header">
+        <div class="lesson-eyebrow">RE-OL-07 · 7 minutes</div>
+        <h1 class="lesson-title">Dialer Usage: Power Dialer, Dispositions &amp; DNC</h1>
+        <div class="lesson-meta-row">
+          <span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+            SDR · Agent
+          </span>
+          <span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            7 min read
+          </span>
+          <span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1-2-2h11"/></svg>
+            Knowledge Check (3 questions · pass 3/3)
+          </span>
+        </div>
+      </header>
+
+      <div class="lesson-content">
+
+        <!-- SECTION 1 -->
+        <section class="lesson-section">
+          <h2 class="lesson-section-title">Before You Start a Dial Session</h2>
+          <p class="lesson-text">The power dialer lives in the CRM's dialer workspace. Before your first dial of the day:</p>
+
+          <ol class="lesson-steps">
+            <li><div><strong>Confirm your phone is set.</strong> Your assigned dialer phone number must be configured in your profile — the dialer places calls from it. If it's not set, stop and tell your manager; don't borrow someone else's line.</div></li>
+            <li><div><strong>Open your queue, highest priority first.</strong> The dialer feeds you leads in priority order — work the queue, don't cherry-pick easy names.</div></li>
+            <li><div><strong>Check the DNC flag on every lead before dialing.</strong> The dialer should surface the flag, but the final responsibility is yours. If a lead is flagged Do Not Contact, skip it — no exceptions, no "just one more try."</div></li>
+            <li><div><strong>Know your calling window.</strong> Dial only between 8:00 AM and 9:00 PM <em>in the lead's local timezone</em> — not yours. (Full rules in Lesson 09.)</div></li>
+          </ol>
+        </section>
+
+        <!-- SECTION 2 -->
+        <section class="lesson-section">
+          <h2 class="lesson-section-title">Call Dispositions: Log Every Call</h2>
+          <p class="lesson-text">A disposition is the single code that says what happened on a call. It must be set <strong>immediately after every dial</strong> — before the next one starts.</p>
+
+          <ul class="lesson-list">
+            <li><strong>Answered</strong> — You spoke to the person. Log notes + the agreed next step.</li>
+            <li><strong>No Answer / Voicemail</strong> — Leave a short, professional voicemail (name, company, reason, callback number), then log it. The timestamp matters — it proves the attempt happened.</li>
+            <li><strong>Callback Requested</strong> — They asked you to call back. Create a follow-up task with the specific date/time they gave — not "later."</li>
+            <li><strong>Qualified</strong> — Motivation + timeline + property confirmed. Move the pipeline stage and schedule the next step.</li>
+            <li><strong>Not a Fit</strong> — Log why (no motivation, wrong market, price expectations). Close the lead out cleanly.</li>
+            <li><strong>Do Not Contact</strong> — They asked to be removed. Set the flag immediately, stop outreach, tell your manager.</li>
+            <li><strong>Wrong Number</strong> — Mark it so nobody wastes another dial on it. Note the source if the number came from skip-tracing.</li>
+          </ul>
+
+          <div class="callout">
+            <div class="callout-label">Non-Negotiable</div>
+            <p>Every dial gets a disposition. "I'll log it later" is how calls vanish from the record. Disposition first, then breathe, then dial the next lead.</p>
+          </div>
+        </section>
+
+        <!-- SECTION 3 -->
+        <section class="lesson-section">
+          <h2 class="lesson-section-title">DNC Rules on the Dialer</h2>
+          <ul class="lesson-list">
+            <li><strong>Opt-out = instant stop.</strong> "Take me off your list," "don't call again," "remove me" — all mean the same thing. Set the DNC flag during the call if possible, definitely within the hour.</li>
+            <li><strong>National + state DNC registries are scrubbed at the list level</strong> before leads hit your queue — but scrubbing is a safety net, not a guarantee. If a person tells you they're on the Do Not Call list, treat it as an opt-out.</li>
+            <li><strong>Never text a skip-traced number.</strong> Enriched numbers (Lesson 08) are manual-call-only. Cold texts to these numbers carry serious per-message liability — see Lesson 09.</li>
+            <li><strong>Don't game the system.</strong> Spoofing numbers to increase answer rates, calling from personal phones to dodge flags, or re-dialing opt-outs will cost you your seat. Instantly.</li>
+          </ul>
+        </section>
+
+        <!-- SECTION 4 -->
+        <section class="lesson-section">
+          <h2 class="lesson-section-title">Voicemail &amp; Wrap-Up Standards</h2>
+          <ul class="lesson-list">
+            <li><strong>Voicemail under 20 seconds:</strong> your name, Ocean Luxe, why you're calling (the property), your callback number — spoken slowly. Then hang up.</li>
+            <li><strong>Wrap-up time is for logging, not chatting.</strong> Set the disposition, write the notes, create the follow-up task, move on.</li>
+            <li><strong>End-of-session audit:</strong> dials made, dispositions set, follow-ups scheduled, DNC flags applied. If a dial has no disposition, the session isn't done.</li>
+          </ul>
+
+          <div class="callout">
+            <div class="callout-label">Key Principle</div>
+            <p>The dialer multiplies your effort — which means it multiplies sloppiness too. Clean dispositions and instant DNC flags are what let one agent safely work hundreds of dials a day.</p>
+          </div>
+        </section>
+
+        <!-- PRACTICE -->
+        <section class="lesson-section">
+          <h2 class="lesson-section-title">Quick Practice</h2>
+          <div class="practice-box">
+            <div class="practice-title">Disposition Drill</div>
+            <p class="lesson-text" style="font-size:var(--text-sm); margin-bottom:var(--space-3);">For each outcome, name the disposition AND the follow-up action: (1) You leave a voicemail. (2) They say "call me back Thursday morning." (3) They say "stop calling me."</p>
+            <textarea class="practice-textarea" placeholder='1) ________ → ________&#10;2) ________ → ________&#10;3) ________ → ________'></textarea>
+          </div>
+        </section>
+
+        <!-- QUIZ -->
+        <section class="quiz-section">
+          <div class="quiz-header">
+            <h2 class="quiz-title">Knowledge Check</h2>
+            <p class="quiz-subtitle">3 questions · pass 3/3 to complete this lesson</p>
+          </div>
+
+          <div class="quiz-question" data-q="0">
+            <div class="quiz-q-text">1. When must a call disposition be set?</div>
+            <div class="quiz-options">
+              <button class="quiz-option" data-opt="0"><span class="quiz-option-letter">A</span> At the end of the dial session</button>
+              <button class="quiz-option" data-opt="1"><span class="quiz-option-letter">B</span> Immediately after each dial, before dialing the next lead</button>
+              <button class="quiz-option" data-opt="2"><span class="quiz-option-letter">C</span> Only for answered calls</button>
+              <button class="quiz-option" data-opt="3"><span class="quiz-option-letter">D</span> The dialer sets it automatically</button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question" data-q="1">
+            <div class="quiz-q-text">2. A skip-traced (enriched) number has no prior relationship with Ocean Luxe. How may you contact it?</div>
+            <div class="quiz-options">
+              <button class="quiz-option" data-opt="0"><span class="quiz-option-letter">A</span> Text and call — any channel is fine</button>
+              <button class="quiz-option" data-opt="1"><span class="quiz-option-letter">B</span> Text first, then call if no response</button>
+              <button class="quiz-option" data-opt="2"><span class="quiz-option-letter">C</span> Manual voice call only — never text a skip-traced number</button>
+              <button class="quiz-option" data-opt="3"><span class="quiz-option-letter">D</span> Leave it for the next agent</button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-question" data-q="2">
+            <div class="quiz-q-text">3. A lead says "don't call me again" mid-call. What is the correct sequence?</div>
+            <div class="quiz-options">
+              <button class="quiz-option" data-opt="0"><span class="quiz-option-letter">A</span> Try to save the conversation, then flag DNC later</button>
+              <button class="quiz-option" data-opt="1"><span class="quiz-option-letter">B</span> End politely, set the DNC flag immediately, stop all outreach</button>
+              <button class="quiz-option" data-opt="2"><span class="quiz-option-letter">C</span> Log "Not Interested" and try again in 30 days</button>
+              <button class="quiz-option" data-opt="3"><span class="quiz-option-letter">D</span> Transfer the lead to another agent's queue</button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <div class="quiz-submit-row">
+            <button class="btn-submit" id="quizSubmit">Submit Answers</button>
+          </div>
+
+          <div class="quiz-score-box" id="quizScoreBox">
+            <div class="quiz-score-num" id="quizScoreNum">—</div>
+            <div class="quiz-score-msg" id="quizScoreMsg"></div>
+            <a href="lesson-08.html" class="btn-primary" style="display:inline-flex; margin:0 auto;">Next Lesson: VA Skip-Trace SOP →</a>
+          </div>
+        </section>
+
+      </div>
+    </main>
+
+    <aside class="lesson-sidebar">
+      <div class="sidebar-card">
+        <div class="sidebar-title">Learning Objectives</div>
+        <ul class="sidebar-objectives">
+          <li>Run a compliant dial session: phone set, queue order, DNC check, calling window</li>
+          <li>Apply the correct disposition to every dial and log the follow-up action</li>
+          <li>State the dialer DNC rules, including the no-cold-text rule for skip-traced numbers</li>
+        </ul>
+        <div class="sidebar-nav">
+          <a href="lesson-06.html" class="btn-nav">← Lesson 06</a>
+          <a href="lesson-08.html" class="btn-nav primary">Next: Skip-Trace SOP →</a>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    const questions = [
+      { correct: 1, explanation: 'Disposition first, then the next dial. Batching dispositions at session end loses accuracy and creates phantom calls.' },
+      { correct: 2, explanation: 'Skip-traced numbers are manual-call-only. A found number is not consent to text — cold texts to these numbers carry serious per-message liability.' },
+      { correct: 1, explanation: 'End politely, flag Do Not Contact immediately, and stop all outreach. There is no "try once more" — for you or any teammate.' }
+    ];
+    initQuiz(questions, 3, () => {
+      markLessonComplete(7);
+      updateNavProgress();
+    });
+  </script>
+</body>
+</html>
