@@ -133,6 +133,8 @@ interface EmailRequestSummary {
   createdAt: string;
   updatedAt: string;
   notes: string;
+  provisioningError?: string;
+  crmUserId?: number | null;
 }
 
 function formatEventTime(value: string) {
@@ -324,8 +326,12 @@ export default function AdminPage() {
   const [hrAccessCode, setHrAccessCode] = useState("");
   const [hrAccessError, setHrAccessError] = useState("");
   const [hrAccessLoading, setHrAccessLoading] = useState(false);
+  const [crmSsoWaiting, setCrmSsoWaiting] = useState(false);
+  const [crmSsoTimedOut, setCrmSsoTimedOut] = useState(false);
   const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null);
   const [revealedPasswords, setRevealedPasswords] = useState<Record<number, string>>({});
+  const [provisionSteps, setProvisionSteps] = useState<{ email: string; steps: string[]; crmUserId: number | null } | null>(null);
+  const [provisionError, setProvisionError] = useState<string>("");
   const [editForm, setEditForm] = useState({
     subscriptionStatus: "Trial",
     payoutMethodType: "",
@@ -473,6 +479,22 @@ export default function AdminPage() {
     },
   });
 
+  const { mutate: provisionEmailRequest, isPending: isProvisioningEmail } = useMutation({
+    mutationFn: async (id: number) =>
+      (await apiRequest("POST", `/api/admin/email-requests/${id}/provision`, {})).json(),
+    onSuccess: async (data: any) => {
+      await qc.invalidateQueries({ queryKey: ["/api/admin/email-requests"] });
+      const steps: string[] = Array.isArray(data?.ionos?.steps) ? data.ionos.steps : [];
+      if (steps.length) {
+        setProvisionSteps({ email: String(data?.requestedEmail || ""), steps, crmUserId: data?.crmUserId ?? null });
+      }
+    },
+    onError: async (e: any) => {
+      await qc.invalidateQueries({ queryKey: ["/api/admin/email-requests"] });
+      setProvisionError(String(e?.message || "Provisioning failed."));
+    },
+  });
+
   const { mutate: activateAgent } = useMutation({
     mutationFn: async (agentId: number) => apiRequest("PATCH", `/api/agents/${agentId}`, { subscriptionStatus: "Active" }),
     onSuccess: () => {
@@ -575,6 +597,34 @@ export default function AdminPage() {
     });
   }, [selectedAgentDetails]);
 
+  // CRM SSO polling: while waiting for the user to sign in via the CRM tab,
+  // re-check /api/admin/me every 3s (up to 3 minutes). The server validates
+  // the shared CRM session cookie; when it resolves, the dashboard unlocks.
+  useEffect(() => {
+    if (!crmSsoWaiting || currentAdmin) return;
+    let attempts = 0;
+    const maxAttempts = 60;
+    const timer = setInterval(() => {
+      attempts += 1;
+      if (attempts >= maxAttempts) {
+        clearInterval(timer);
+        setCrmSsoWaiting(false);
+        setCrmSsoTimedOut(true);
+        return;
+      }
+      qc.invalidateQueries({ queryKey: ["/api/admin/me"] });
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [crmSsoWaiting, currentAdmin, qc]);
+
+  // Stop waiting as soon as the session resolves.
+  useEffect(() => {
+    if (currentAdmin && crmSsoWaiting) {
+      setCrmSsoWaiting(false);
+      setCrmSsoTimedOut(false);
+    }
+  }, [currentAdmin, crmSsoWaiting]);
+
   if (isLoadingAdmin) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-6">
@@ -622,15 +672,42 @@ export default function AdminPage() {
                 Open career.oceanluxe.org →
               </a>
             )}
-            <a
-              href="https://crm.oceanluxe.org"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-semibold"
+            <button
+              type="button"
+              onClick={() => {
+                // Open the CRM sign-in in a new tab, then poll for the shared
+                // session: once the CRM cookie is present, /api/admin/me
+                // resolves via CRM SSO and this page unlocks automatically.
+                window.open("https://crm.oceanluxe.org/login", "_blank", "noopener,noreferrer");
+                setCrmSsoWaiting(true);
+                setCrmSsoTimedOut(false);
+              }}
+              disabled={crmSsoWaiting}
+              className="inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-semibold disabled:opacity-50"
               style={{ background: "#0a0a0a", color: "hsl(43,85%,52%)" }}
             >
-              Open CRM Login
-            </a>
+              {crmSsoWaiting ? "Waiting for CRM sign-in…" : "Sign in with CRM"}
+            </button>
+            {crmSsoWaiting && (
+              <div className="rounded-xl border border-border p-4 text-left space-y-2 bg-muted/30">
+                <p className="text-sm font-semibold">Complete sign-in in the CRM tab</p>
+                <p className="text-xs text-muted-foreground">
+                  {crmSsoTimedOut
+                    ? "No CRM session detected. Make sure you signed in as an admin, manager, or owner in the CRM tab, then try again."
+                    : "This page checks for your CRM session every few seconds and will unlock automatically."}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCrmSsoWaiting(false);
+                    setCrmSsoTimedOut(false);
+                  }}
+                  className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
 
             <div className="rounded-xl border border-border p-4 text-left space-y-2">
               <p className="text-xs uppercase tracking-widest text-muted-foreground">HR Access Code</p>
@@ -1336,7 +1413,16 @@ export default function AdminPage() {
                     const localReveal = revealedPasswords[request.id] || "";
                     const revealedAt = (request.tempPasswordRevealedAt || "").trim();
                     const canReveal = !revealedAt && request.status !== "rejected";
-                    const canResolve = request.status === "requested";
+                    const canProvision = request.status === "requested" || request.status === "failed";
+                    const canMarkCreated = request.status === "requested" || request.status === "provisioning";
+                    const statusStyle =
+                      request.status === "failed"
+                        ? "bg-red-100 text-red-800 border border-red-200"
+                        : request.status === "provisioning"
+                          ? "bg-amber-100 text-amber-800 border border-amber-200"
+                          : request.status === "created"
+                            ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                            : "bg-muted text-muted-foreground";
 
                     return (
                       <tr key={request.id} className="border-b border-border last:border-0">
@@ -1357,9 +1443,15 @@ export default function AdminPage() {
                           </div>
                         </td>
                         <td className="px-5 py-4">
-                          <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium capitalize">
+                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium capitalize ${statusStyle}`}>
                             {request.status.replace("_", " ")}
                           </span>
+                          {request.status === "failed" && (request.provisioningError || "").trim() ? (
+                            <p className="text-[11px] text-red-700 mt-1 max-w-[220px]">{request.provisioningError}</p>
+                          ) : null}
+                          {request.crmUserId ? (
+                            <p className="text-[11px] text-muted-foreground mt-1">CRM user #{request.crmUserId}</p>
+                          ) : null}
                         </td>
                         <td className="px-5 py-4">
                           <span className="text-xs text-muted-foreground">{formatDate(request.createdAt)}</span>
@@ -1376,8 +1468,18 @@ export default function AdminPage() {
                             </button>
                             <button
                               type="button"
+                              onClick={() => { setProvisionError(""); setProvisionSteps(null); provisionEmailRequest(request.id); }}
+                              disabled={!canProvision || isProvisioningEmail}
+                              title="Create the CRM employee account automatically and generate the IONOS manual steps"
+                              className="rounded-md border border-blue-200 px-3 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-50 disabled:opacity-50"
+                            >
+                              {isProvisioningEmail ? "Provisioning…" : request.status === "failed" ? "Retry provision" : "Approve & Provision"}
+                            </button>
+                            <button
+                              type="button"
                               onClick={() => updateEmailRequestStatus({ id: request.id, status: "created" })}
-                              disabled={!canResolve || isUpdatingEmailRequestStatus}
+                              disabled={!canMarkCreated || isUpdatingEmailRequestStatus}
+                              title="Confirm the IONOS mailbox was created manually"
                               className="rounded-md border border-emerald-200 px-3 py-1.5 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-50 disabled:opacity-50"
                             >
                               Mark created
@@ -1385,7 +1487,7 @@ export default function AdminPage() {
                             <button
                               type="button"
                               onClick={() => updateEmailRequestStatus({ id: request.id, status: "rejected" })}
-                              disabled={!canResolve || isUpdatingEmailRequestStatus}
+                              disabled={request.status !== "requested" || isUpdatingEmailRequestStatus}
                               className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 transition-colors hover:bg-red-50 disabled:opacity-50"
                             >
                               Reject

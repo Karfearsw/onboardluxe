@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import { pool } from "./db.js";
 import crypto from "crypto";
 import { HR_ADMIN_COOKIE_NAME, verifyHrAdminToken } from "./hr-admin-access.js";
+import { validateCrmAdminSession } from "./crm-sso.js";
 
 const DEFAULT_COOKIE_NAMES = [
   "connect.sid",
@@ -334,6 +335,26 @@ export async function attachSharedAuthUser(req: Request, _res: Response, next: N
             sessionToken: "hr_admin",
           };
         }
+      }
+    }
+
+    // CRM single sign-on: a live CRM admin/manager/owner session (shared via
+    // COOKIE_DOMAIN=.oceanluxe.org) grants career admin access without the HR
+    // access code. Fail-closed — any error leaves authUser null.
+    if (!req.authUser) {
+      const crmUser = await validateCrmAdminSession(req);
+      if (crmUser) {
+        req.authUser = {
+          id: crmUser.id,
+          email: crmUser.email,
+          name: crmUser.name,
+          role: crmUser.role,
+          organizationId: null,
+          organizationName: null,
+          organizationSlug: null,
+          organizationRole: null,
+          sessionToken: `crm-sso`,
+        };
       }
     }
 
