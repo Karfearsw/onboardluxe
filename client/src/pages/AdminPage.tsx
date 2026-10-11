@@ -1393,6 +1393,48 @@ export default function AdminPage() {
             </button>
           </div>
 
+          {provisionError ? (
+            <div className="mx-5 mt-4 rounded-lg border border-red-200 bg-red-50 p-4 text-xs text-red-800">
+              <p className="font-semibold">Provisioning failed</p>
+              <p className="mt-1">{provisionError}</p>
+              <button
+                type="button"
+                onClick={() => setProvisionError("")}
+                className="mt-2 underline hover:no-underline"
+              >
+                Dismiss
+              </button>
+            </div>
+          ) : null}
+
+          {provisionSteps ? (
+            <div className="mx-5 mt-4 rounded-lg border border-blue-200 bg-blue-50/60 p-4 text-xs">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-blue-900">
+                    CRM account created{provisionSteps.crmUserId ? ` (user #${provisionSteps.crmUserId})` : ""} — now create the mailbox in IONOS
+                  </p>
+                  <p className="text-blue-800/80 mt-1">
+                    IONOS has no mailbox API, so this step is manual. Use “Reveal once” on {provisionSteps.email} to copy the temp password.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setProvisionSteps(null)}
+                  className="text-blue-700 underline hover:no-underline shrink-0"
+                >
+                  Dismiss
+                </button>
+              </div>
+              <ol className="mt-2 space-y-1 text-blue-900 list-none">
+                {provisionSteps.steps.map((step, i) => (
+                  <li key={i}>{step}</li>
+                ))}
+              </ol>
+              <p className="mt-2 font-medium text-blue-900">When the mailbox exists in IONOS, click “Mark created” on this request.</p>
+            </div>
+          ) : null}
+
           {isLoadingEmailRequests ? (
             <div className="p-8 text-center text-muted-foreground text-sm">Loading email requests...</div>
           ) : emailRequests.length === 0 ? (

@@ -170,6 +170,9 @@ export const emailRequests = pgTable(
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
     notes: text("notes").notNull().default(""),
+    // Provisioning pipeline (career approval → IONOS email → CRM account)
+    provisioningError: text("provisioning_error").notNull().default(""),
+    crmUserId: integer("crm_user_id"),
   },
   (t) => ({
     agentIdx: index("hr_email_requests_agent_idx").on(t.agentId),

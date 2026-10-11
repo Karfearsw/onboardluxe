@@ -124,7 +124,7 @@ const adminEventsQuerySchema = z.object({
 });
 const emailRequestUpdateSchema = z.object({
   requestedEmail: z.string().trim().optional(),
-  status: z.enum(["requested", "created", "rejected"]).optional(),
+  status: z.enum(["requested", "provisioning", "created", "failed", "rejected"]).optional(),
   notes: z.string().trim().optional(),
   tempPassword: z.string().trim().min(8).optional(),
   generateTempPassword: z.boolean().optional(),
@@ -143,8 +143,10 @@ function serializeEmailRequest(request: any) {
     createdAt,
     updatedAt,
     notes,
+    provisioningError,
+    crmUserId,
   } = request;
-  return { id, agentId, requestedEmail, status, tempPasswordCreatedAt, tempPasswordRevealedAt, createdAt, updatedAt, notes };
+  return { id, agentId, requestedEmail, status, tempPasswordCreatedAt, tempPasswordRevealedAt, createdAt, updatedAt, notes, provisioningError, crmUserId };
 }
 
 function normalizeEmailLocalPart(value: string) {
@@ -1027,7 +1029,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.patch("/api/admin/email-requests/:id/status", requireSharedAdmin, async (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ message: "Invalid request id" });
-    const schema = z.object({ status: z.enum(["requested", "created", "rejected"]), notes: z.string().optional() });
+    const schema = z.object({ status: z.enum(["requested", "provisioning", "created", "failed", "rejected"]), notes: z.string().optional() });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: "Invalid status payload", issues: parsed.error.issues });
@@ -1047,7 +1049,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         ? "agent.email_created"
         : parsed.data.status === "rejected"
           ? "agent.email_rejected"
-          : "agent.email_requested",
+          : parsed.data.status === "failed"
+            ? "agent.email_provisioning_failed"
+            : parsed.data.status === "provisioning"
+              ? "agent.email_provisioning_started"
+              : "agent.email_requested",
       actorType: "admin",
       actorId: String(req.authUser?.id ?? ""),
       oldValue: previousStatus,
@@ -1065,6 +1071,111 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({
       ...serializeEmailRequest(updated),
       hasTempPassword: Boolean((updated?.tempPasswordCiphertext || "").trim()),
+    });
+  });
+
+  // ── Unified provisioning: approve → create CRM account → IONOS handoff ──
+  // POST /api/admin/email-requests/:id/provision
+  // Sets status=provisioning, runs the pipeline (CRM user auto-created;
+  // IONOS mailbox is manual — exact steps returned), then persists
+  // status=created (CRM ok) or status=failed + provisioning_error.
+  // Idempotent-ish: safe to retry from requested/failed; skips when already
+  // provisioning/provisioned.
+  app.post("/api/admin/email-requests/:id/provision", requireSharedAdmin, async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ message: "Invalid request id" });
+
+    const request = await storage.getEmailRequest(id);
+    if (!request) return res.status(404).json({ message: "Email request not found" });
+    if (request.status === "provisioning") {
+      return res.status(409).json({ message: "Provisioning is already in progress for this request." });
+    }
+    if (request.status === "created") {
+      return res.status(409).json({ message: "This request was already provisioned." });
+    }
+    if (request.status === "rejected") {
+      return res.status(400).json({ message: "Rejected requests cannot be provisioned." });
+    }
+
+    const agent = await storage.getAgent(request.agentId);
+    if (!agent) return res.status(404).json({ message: "Agent not found" });
+
+    const now = new Date().toISOString();
+    await storage.updateEmailRequest(id, { status: "provisioning", provisioningError: "", updatedAt: now });
+    await logStatusEvent({
+      agentId: request.agentId,
+      eventType: "agent.email_provisioning_started",
+      actorType: "admin",
+      actorId: String(req.authUser?.id ?? ""),
+      metadata: { requestedEmail: request.requestedEmail, emailRequestId: request.id },
+    });
+
+    const { runProvisionPipeline } = await import("./provisioning.js");
+    const result = await runProvisionPipeline({
+      request: {
+        id: request.id,
+        requestedEmail: request.requestedEmail,
+        tempPasswordCiphertext: request.tempPasswordCiphertext,
+      },
+      agent: { id: agent.id, name: agent.name, phone: agent.phone },
+    });
+
+    if (result.ok) {
+      // IONOS is manual: keep the request in "provisioning" with the exact
+      // steps in notes until the admin confirms the mailbox exists via
+      // "Mark created". The CRM account is done.
+      const stepsNote = [
+        `CRM account created (CRM user id ${result.crmUserId}).`,
+        `IONOS mailbox still needs manual creation:`,
+        ...result.ionos.steps,
+      ].join("\n");
+      const existingNotes = (request.notes || "").trim();
+      const updated = await storage.updateEmailRequest(id, {
+        status: "provisioning",
+        crmUserId: result.crmUserId ?? null,
+        provisioningError: "",
+        notes: existingNotes ? `${existingNotes}\n\n${stepsNote}` : stepsNote,
+        updatedAt: new Date().toISOString(),
+      });
+      await logStatusEvent({
+        agentId: request.agentId,
+        eventType: "agent.email_provisioning_crm_done",
+        actorType: "admin",
+        actorId: String(req.authUser?.id ?? ""),
+        metadata: { requestedEmail: request.requestedEmail, emailRequestId: request.id, crmUserId: result.crmUserId },
+      });
+      queueDiscordWebhook("agent.email_provisioning_crm_done", {
+        agentId: request.agentId,
+        requestedEmail: request.requestedEmail,
+        emailRequestId: request.id,
+        crmUserId: result.crmUserId,
+        timestamp: now,
+      });
+      return res.json({
+        ...serializeEmailRequest(updated),
+        hasTempPassword: Boolean((updated?.tempPasswordCiphertext || "").trim()),
+        ionos: result.ionos,
+        crmUserId: result.crmUserId,
+      });
+    }
+
+    const failed = await storage.updateEmailRequest(id, {
+      status: "failed",
+      provisioningError: (result.error || "Provisioning failed.").slice(0, 500),
+      updatedAt: new Date().toISOString(),
+    });
+    await logStatusEvent({
+      agentId: request.agentId,
+      eventType: "agent.email_provisioning_failed",
+      actorType: "admin",
+      actorId: String(req.authUser?.id ?? ""),
+      metadata: { requestedEmail: request.requestedEmail, emailRequestId: request.id, error: result.error },
+    });
+    return res.status(502).json({
+      ...serializeEmailRequest(failed),
+      hasTempPassword: Boolean((failed?.tempPasswordCiphertext || "").trim()),
+      ionos: result.ionos,
+      error: result.error,
     });
   });
 
